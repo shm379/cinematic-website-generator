@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Large source asset — exceeds GitHub's 100 MB file limit.
+# The hero frames are already extracted into public/frames/, so the
+# live site does not need this file. To regenerate frames, see the
+# ffmpeg commands at the top of server.js.
+resourcess-assets/video-01.mp4
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store

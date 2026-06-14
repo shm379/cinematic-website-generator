@@ -1,0 +1,8 @@
+# The deploy only needs public/ (set as outputDirectory in vercel.json).
+# resourcess-assets/ holds the 155 MB source video that exceeds Vercel's
+# 100 MB upload limit — and is not used by the live static site.
+node_modules
+resourcess-assets
+.git
+MASTER-PROMPT.md
+server.js
