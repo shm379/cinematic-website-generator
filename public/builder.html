@@ -231,7 +231,7 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var state = { field: 'tea', lang: 'fa' };
+  var state = { field: 'tea', lang: 'fa', brandTouched: false };
 
   /* ---------- field chips ---------- */
   var chipsEl = $('fieldChips');
@@ -282,7 +282,7 @@
   /* ---------- load preset into the form ---------- */
   function loadPreset(field, keepBrand) {
     var p = CWG.presetFor(field);
-    if (!keepBrand) $('brand').value = $('brand').value || p.label;
+    if (!keepBrand) $('brand').value = p.label;
     $('fieldLabel').value = p.label;
     $('accent').value = p.accent; markSwatch(p.accent);
     $('heroTitle').value = p.heroTitle;
@@ -316,7 +316,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (el) {
       el.classList.toggle('active', el.getAttribute('data-field') === f);
     });
-    loadPreset(f, true);
+    loadPreset(f, state.brandTouched);
     render();
   }
 
@@ -395,7 +395,9 @@
     el.addEventListener('input', scheduleRender);
   });
   $('genBtn').addEventListener('click', render);
-  $('resetBtn').addEventListener('click', function () { loadPreset(state.field, false); render(); });
+  // once the user personalises the brand, keep it across field switches
+  $('brand').addEventListener('input', function () { state.brandTouched = (this.value || '').trim().length > 0; });
+  $('resetBtn').addEventListener('click', function () { state.brandTouched = false; loadPreset(state.field, false); render(); });
 
   /* ---------- export actions ---------- */
   function toast(msg) {
