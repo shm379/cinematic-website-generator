@@ -40,14 +40,12 @@ node server.js
 
 ## 🐳 استقرار با Docker / Coolify
 
-### Docker
+### Docker (اجرای محلی)
 ```bash
 docker build -t cinemate .
 docker run -p 3000:3000 cinemate          # → http://localhost:3000
-# یا:
-docker compose up -d
 ```
-سلامتِ کانتینر از طریقِ `/healthz` بررسی می‌شود.
+> با `docker compose` برای دسترسیِ محلی، بلوکِ `ports:` در `docker-compose.yml` را از کامنت دربیاور (در Coolify باید کامنت بماند). سلامتِ کانتینر از طریقِ `/healthz` بررسی می‌شود.
 
 ### Coolify
 1. در Coolify یک **Resource** جدید از روی این مخزنِ Git بساز.

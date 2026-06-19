@@ -1,15 +1,21 @@
 # Cinemate — Docker Compose (Coolify-aware)
 #
-# Local:
-#   docker compose up -d            → http://localhost:3000
-#
-# Coolify:
+# Coolify (recommended):
 #   New Resource → this Git repo → Build Pack: "Docker Compose".
-#   The magic env var SERVICE_FQDN_WEB_3000 below tells Coolify to generate a
-#   domain and route its proxy (Traefik/Caddy) to port 3000 of the `web`
-#   service — this is what makes traffic actually reach the container.
-#   To use your own domain, set SERVICE_FQDN_WEB_3000=https://your-domain.com
+#   The magic env var SERVICE_FQDN_WEB_3000 tells Coolify to generate a domain
+#   and route its proxy (Traefik/Caddy) over the internal network to the
+#   EXPOSED port 3000 of the `web` service. This is what makes traffic reach
+#   the container — WITHOUT publishing a host port.
+#   To use your own domain set SERVICE_FQDN_WEB_3000=https://your-domain.com
 #   in Coolify's environment variables (or leave it empty to auto-generate).
+#
+#   IMPORTANT: do NOT add a `ports:` host mapping here. Coolify already binds
+#   :80/:443 (and may reuse :3000); publishing the host port causes
+#   "Bind for 0.0.0.0:3000 failed: port is already allocated".
+#
+# Local testing:
+#   Option A (no compose):  docker build -t cinemate . && docker run -p 3000:3000 cinemate
+#   Option B (compose):     uncomment the `ports:` block below, then `docker compose up -d`
 
 services:
   web:
@@ -18,17 +24,17 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      # Coolify reads PORT; the app binds exactly to it (see server.js).
+      # server.js binds exactly to this port on 0.0.0.0.
       - PORT=3000
       # Coolify magic var → generates an FQDN and proxies it to web:3000.
       - SERVICE_FQDN_WEB_3000
-    # Coolify routes via its proxy to this exposed container port.
+    # Coolify's proxy routes to this exposed container port over the Docker
+    # network (no host binding needed).
     expose:
       - "3000"
-    # Published for local `docker compose up`. Coolify ignores host publishing
-    # and uses its proxy + the exposed port above.
-    ports:
-      - "3000:3000"
+    # --- Local only: uncomment to reach the app on http://localhost:3000 ---
+    # ports:
+    #   - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
       interval: 30s
