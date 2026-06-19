@@ -208,6 +208,45 @@
     syncForm(); preview();
   }
 
+  /* ----- mega prompt: free text → full config ----- */
+  function applyGenerated(g) {
+    cfg = buildFromPreset(g.field, g.brand, g.lang);
+    cfg.fieldLabel = g.fieldLabel || cfg.fieldLabel;
+    cfg.accent = (g.theme && g.theme.accent) || g.accent || cfg.accent;
+    cfg.motif = (g.theme && g.theme.motif) || cfg.motif;
+    cfg.heroTitle = g.heroTitle || cfg.heroTitle;
+    if (g.overlays && g.overlays.length) cfg.overlays = g.overlays;
+    cfg.eyebrow = g.eyebrow || cfg.eyebrow;
+    cfg.collectionTitle = g.collectionTitle || cfg.collectionTitle;
+    if (g.items && g.items.length) cfg.items = g.items.map(function (it) { return Object.assign({}, it); });
+    cfg.newsletterTitle = g.newsletterTitle || cfg.newsletterTitle;
+    cfg.newsletterSub = g.newsletterSub || cfg.newsletterSub;
+    cfg.footerNote = g.footerNote || cfg.footerNote;
+    brandTouched = true; // the prompt specified the brand intent
+  }
+  $('#wzPromptBtn').addEventListener('click', function () {
+    var p = ($('#wzPrompt').value || '').trim();
+    if (!p) { toast('یک توصیف بنویس'); return; }
+    var btn = this, old = btn.textContent;
+    btn.disabled = true; btn.textContent = '… در حال ساخت';
+    function finish(g, msg) {
+      applyGenerated(g); syncForm(); preview(); showStep(4);
+      btn.disabled = false; btn.textContent = old; toast(msg);
+    }
+    fetch('/api/generate-from-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: p, lang: state.lang })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('server');
+      return r.json();
+    }).then(function (data) {
+      finish(data.config, data.via === 'llm' ? 'با هوش مصنوعی ساخته شد ✨' : 'ساخته شد ✨');
+    }).catch(function () {
+      // static host / no server → keyless client-side parse
+      finish(CWG.withDefaults(CWG.parsePrompt(p)), 'ساخته شد (تحلیل محلی) ✨');
+    });
+  });
+
   /* ----- swatches (step 3) ----- */
   var SW = ['#f59e0b', '#c98a5e', '#e6a4ad', '#e7c873', '#7fa8c9', '#e0613e', '#b6f24a', '#5fd3c4', '#8b5cf6', '#d8d2c8'];
   var wzSw = $('#wzSwatches');
@@ -243,8 +282,50 @@
     var d = document.createElement('div'); d.className = 'cardmini'; d.setAttribute('data-i', k);
     d.innerHTML = '<h5>کارت ' + (k + 1) + '</h5>' +
       '<div class="wz-row"><input class="wz-input c-name" placeholder="نام"><input class="wz-input c-price" placeholder="قیمت"></div>' +
-      '<input class="wz-input c-desc" style="margin-top:10px" placeholder="توضیح کوتاه">';
+      '<input class="wz-input c-desc" style="margin-top:10px" placeholder="توضیح کوتاه">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">' +
+        '<button type="button" class="btn btn-ghost c-img" style="font-size:12px;padding:9px 13px">🎨 ساخت عکس</button>' +
+        '<span class="c-imgstatus" style="font-size:11px;color:var(--faint)"></span>' +
+      '</div>';
     wzCards.appendChild(d);
+  }
+
+  /* ----- AI image generation (needs server + OPENAI_API_KEY) ----- */
+  var imgStyle = 'cinematic';
+  $$('#wzImgStyle button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      imgStyle = b.getAttribute('data-imgstyle');
+      $$('#wzImgStyle button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    });
+  });
+  wzCards.addEventListener('click', function (e) {
+    var btn = e.target.closest('.c-img'); if (!btn) return;
+    var box = btn.closest('.cardmini'); var i = +box.getAttribute('data-i');
+    genCardImage(i, btn);
+  });
+  function genCardImage(i, btn) {
+    var status = btn.parentElement.querySelector('.c-imgstatus');
+    var it = cfg.items[i] || {};
+    var label = CWG.presetFor(cfg.field).label;
+    btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال ساخت';
+    status.textContent = '';
+    fetch('/api/image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        field: cfg.field, style: imgStyle, brand: cfg.brand, accent: cfg.accent,
+        prompt: (it.name ? it.name + ' — ' : '') + (it.desc || label), size: '1536x1024'
+      })
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (o) {
+        btn.disabled = false; btn.textContent = old;
+        if (!o.ok) { status.textContent = o.d && o.d.error ? o.d.error : 'خطا'; return; }
+        cfg.items[i].image = location.origin + o.d.url;
+        status.textContent = '✓ ساخته شد';
+        preview();
+      }).catch(function () {
+        btn.disabled = false; btn.textContent = old;
+        status.textContent = 'نیازمندِ سرور است';
+      });
   }
 
   /* ----- simple text inputs bound to cfg ----- */

@@ -70,6 +70,110 @@ app.get('/api/site', (req, res) => {
   }
 });
 
+// --- API: mega-prompt → site ---------------------------------------------
+// Turns a free-text description into a full config + HTML. Uses Claude when
+// ANTHROPIC_API_KEY is set (and the SDK is installed); otherwise falls back to
+// the keyless heuristic parser in generator.js. Always returns a result.
+async function configFromPromptLLM(prompt) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  let Mod;
+  try { Mod = require('@anthropic-ai/sdk'); } catch (_) { return null; } // optional dep
+  const Anthropic = Mod && Mod.default ? Mod.default : Mod;
+  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+  const model = process.env.CLAUDE_MODEL || 'claude-opus-4-8';
+  const fields = Object.keys(CWG.presets).join(', ');
+  const system =
+    'You convert a business description into a JSON config for a cinematic website generator. ' +
+    'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
+    'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
+    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
+    'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
+    'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
+    'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.';
+  const msg = await client.messages.create({
+    model: model,
+    max_tokens: 2000,
+    system: system,
+    messages: [{ role: 'user', content: String(prompt || '') }]
+  });
+  const text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a === -1 || b === -1) throw new Error('no JSON in model response');
+  return JSON.parse(text.slice(a, b + 1));
+}
+
+app.post('/api/generate-from-prompt', async (req, res) => {
+  const prompt = (req.body && req.body.prompt) || '';
+  if (!String(prompt).trim()) return res.status(400).json({ error: 'prompt is required' });
+  let config = null, via = 'heuristic';
+  try {
+    config = await configFromPromptLLM(prompt);
+    if (config) via = 'llm';
+  } catch (err) {
+    console.warn('LLM prompt parse failed, falling back to heuristic:', err && err.message);
+    config = null;
+  }
+  if (!config) config = CWG.parsePrompt(prompt);
+  try {
+    const full = CWG.withDefaults(config);
+    res.json({ via: via, config: full, html: CWG.generate(full) });
+  } catch (err) {
+    res.status(400).json({ error: String(err && err.message ? err.message : err) });
+  }
+});
+
+// --- API: generate an image (OpenAI gpt-image) ---------------------------
+const IMAGE_STYLES = {
+  cinematic: 'cinematic, dramatic moody lighting, shallow depth of field, atmospheric, premium film still',
+  product: 'clean product photography, soft studio lighting, minimal uncluttered background, centred, crisp detail, e-commerce hero',
+  artistic: 'artistic, painterly, abstract textures, rich gradients, evocative, editorial'
+};
+function buildImagePrompt(o) {
+  const style = IMAGE_STYLES[o.style] || IMAGE_STYLES.cinematic;
+  const preset = CWG.presetFor(o.field);
+  const subject = (o.prompt && String(o.prompt).trim()) ||
+    ('a hero image representing ' + (preset.label || 'a premium brand'));
+  const parts = [
+    subject,
+    'Style: ' + style + '.',
+    o.brand ? ('Brand mood: ' + o.brand + '.') : '',
+    o.accent ? ('Accent colour ' + o.accent + '.') : '',
+    'Dark, premium, high quality. No text, no logo, no watermark.'
+  ];
+  return parts.filter(Boolean).join(' ');
+}
+
+app.post('/api/image', async (req, res) => {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return res.status(400).json({ error: 'OPENAI_API_KEY is not set on the server. Add it to enable AI image generation.' });
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for image generation.' });
+  try {
+    const body = req.body || {};
+    const prompt = buildImagePrompt(body);
+    const r = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+        prompt: prompt,
+        n: 1,
+        size: body.size || '1536x1024'
+      })
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: (data.error && data.error.message) || 'image API error' });
+    const b64 = data.data && data.data[0] && data.data[0].b64_json;
+    if (!b64) return res.status(502).json({ error: 'no image returned' });
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const dir = path.join(__dirname, 'public', 'generated');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, id + '.png'), Buffer.from(b64, 'base64'));
+    res.json({ url: '/generated/' + id + '.png', prompt: prompt });
+  } catch (err) {
+    res.status(500).json({ error: String(err && err.message ? err.message : err) });
+  }
+});
+
 // --- Health check (for Docker / Coolify) ---------------------------------
 app.get('/healthz', (req, res) => res.json({ ok: true, service: 'cinemate' }));
 

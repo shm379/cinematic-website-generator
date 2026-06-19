@@ -483,6 +483,13 @@
           <h2 class="wz-h">حوزه‌ی کاری‌ات چیست؟</h2>
           <p class="wz-p">یکی را انتخاب کن تا یک نقطه‌ی شروعِ حرفه‌ای برایت بچینیم.</p>
           <div class="field-grid" id="wzFields"></div>
+
+          <div style="margin-top:24px;border-top:1px solid var(--line);padding-top:20px">
+            <label class="wz-label" style="margin-top:0">یا کلِ سایت را با یک پرامپت توصیف کن ✨</label>
+            <textarea class="wz-area" id="wzPrompt" placeholder="مثلاً: یک کافه‌ی دنج به نام «دمی» با حال‌وهوای گرم و قهوه‌ای؛ منوی تخصصی و فضای آرام."></textarea>
+            <button class="btn btn-grad" id="wzPromptBtn" style="margin-top:10px">✨ بساز با پرامپت</button>
+            <div style="font-size:11.5px;color:var(--faint);margin-top:8px">با هوش مصنوعی (اگر کلید روی سرور تنظیم شده باشد) یا تحلیلِ متن، حوزه/برند/رنگ استخراج و فرم پر می‌شود.</div>
+          </div>
         </div>
 
         <!-- step 2: brand -->
@@ -507,8 +514,8 @@
           <div class="swrow" id="wzSwatches"><input type="color" class="wz-color" id="wzAccent" value="#f59e0b" /></div>
           <label class="wz-label">موتیفِ هیرو</label>
           <div class="motif-row" id="wzMotif">
-            <button data-motif="soft" class="on">نرم / مه‌آلود</button>
-            <button data-motif="spark">جرقه / نور</button>
+            <button class="motif on" data-motif="soft">نرم / مه‌آلود</button>
+            <button class="motif" data-motif="spark">جرقه / نور</button>
           </div>
           <label class="wz-label">واژه‌ی بزرگ هیرو</label>
           <input class="wz-input" id="wzHeroTitle" placeholder="مثلاً: دمنوش" />
@@ -523,6 +530,15 @@
             <div><label class="wz-label">عنوان کوچک</label><input class="wz-input" id="wzEyebrow" /></div>
             <div><label class="wz-label">تیتر بخش</label><input class="wz-input" id="wzCollTitle" /></div>
           </div>
+
+          <label class="wz-label">سبکِ عکسِ AI 🎨</label>
+          <div class="motif-row" id="wzImgStyle">
+            <button class="motif on" data-imgstyle="cinematic">سینمایی</button>
+            <button class="motif" data-imgstyle="product">محصولی</button>
+            <button class="motif" data-imgstyle="artistic">هنری</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--faint);margin-top:8px">ساختِ عکس نیازمندِ سرور و کلیدِ OpenAI است؛ روی نمونه‌ی استاتیک غیرفعال است.</div>
+
           <div id="wzCards"></div>
         </div>
 

@@ -10,5 +10,11 @@ resourcess-assets/video-01.mp4
 # Vercel
 .vercel
 
+# Runtime: AI-generated images saved by POST /api/image
+public/generated/
+
+# Secrets
+.env
+
 # OS
 .DS_Store

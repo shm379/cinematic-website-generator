@@ -913,10 +913,86 @@ fontLinks + '\n' +
     return html;
   }
 
+  /* ============================================================
+     parsePrompt — heuristic "mega prompt" → config (no API key needed)
+     Detects language, field, brand and accent from free text. Used as the
+     no-key path in the panel and as the server-side fallback when no LLM
+     key is configured.
+     ============================================================ */
+  var FIELD_KEYWORDS = [
+    ['tea', ['چای', 'دمنوش', 'دم‌نوش', 'دمنوش‌', 'tea', 'herbal', 'tisane', 'چای‌خانه']],
+    ['coffee', ['قهوه', 'کافه', 'اسپرسو', 'لاته', 'coffee', 'cafe', 'café', 'espresso', 'barista', 'latte']],
+    ['perfume', ['عطر', 'ادکلن', 'رایحه', 'آرایش', 'زیبایی', 'perfume', 'fragrance', 'scent', 'beauty', 'cosmetic', 'cologne']],
+    ['jewelry', ['طلا', 'جواهر', 'زیورآلات', 'نگین', 'الماس', 'jewelry', 'jewellery', 'gold', 'diamond', 'gem']],
+    ['realestate', ['املاک', 'مسکن', 'آپارتمان', 'ویلا', 'معماری', 'real estate', 'realestate', 'property', 'realty', 'architecture', 'estate']],
+    ['restaurant', ['رستوران', 'کافه‌رستوران', 'بیسترو', 'کترینگ', 'restaurant', 'dining', 'bistro', 'eatery', 'menu', 'food']],
+    ['fitness', ['باشگاه', 'بدنسازی', 'فیتنس', 'تناسب', 'کراسفیت', 'gym', 'fitness', 'workout', 'crossfit', 'training']],
+    ['clinic', ['کلینیک', 'درمان', 'پزشک', 'سلامت', 'دندان', 'clinic', 'medical', 'health', 'dental', 'therapy', 'wellness']],
+    ['tech', ['استارتاپ', 'نرم‌افزار', 'اپلیکیشن', 'فناوری', 'تکنولوژی', 'هوش مصنوعی', 'tech', 'startup', 'software', 'app', 'saas', 'ai', 'platform']],
+    ['fashion', ['مد', 'پوشاک', 'لباس', 'بوتیک', 'fashion', 'clothing', 'apparel', 'wear', 'boutique', 'couture']]
+  ];
+
+  var ACCENT_KEYWORDS = [
+    ['#f59e0b', ['کهربایی', 'amber', 'نارنجی', 'orange']],
+    ['#e7c873', ['طلایی', 'gold', 'golden']],
+    ['#e0613e', ['قرمز', 'سرخ', 'red', 'ember', 'آتشی']],
+    ['#e6a4ad', ['صورتی', 'pink', 'rose', 'گلی']],
+    ['#7fa8c9', ['آبی', 'blue', 'navy', 'سرمه‌ای']],
+    ['#5fd3c4', ['فیروزه‌ای', 'teal', 'turquoise', 'سبزآبی']],
+    ['#b6f24a', ['سبز', 'green', 'lime', 'لیمویی']],
+    ['#8b5cf6', ['بنفش', 'purple', 'violet', 'ارغوانی']],
+    ['#c98a5e', ['قهوه‌ای', 'brown', 'caramel', 'کاراملی']]
+  ];
+
+  function detectField(t) {
+    for (var i = 0; i < FIELD_KEYWORDS.length; i++) {
+      var kws = FIELD_KEYWORDS[i][1];
+      for (var j = 0; j < kws.length; j++) {
+        if (t.indexOf(kws[j].toLowerCase()) !== -1) return FIELD_KEYWORDS[i][0];
+      }
+    }
+    return '_default';
+  }
+
+  function detectAccent(t) {
+    for (var i = 0; i < ACCENT_KEYWORDS.length; i++) {
+      var kws = ACCENT_KEYWORDS[i][1];
+      for (var j = 0; j < kws.length; j++) {
+        if (t.indexOf(kws[j].toLowerCase()) !== -1) return ACCENT_KEYWORDS[i][0];
+      }
+    }
+    return null;
+  }
+
+  function detectBrand(raw) {
+    // quoted name first: «...», "...", “...”, '...'
+    var m = raw.match(/[«"“']\s*([^»"”'\n]{1,40}?)\s*[»"”']/);
+    if (m && m[1].trim()) return m[1].trim();
+    // "برند ..." / "به نام ..." / "named ..." / "called ..." / "brand ..."
+    m = raw.match(/(?:برند(?:\s+به\s+نام)?|به\s+نام|brand(?:\s+(?:called|named))?|named|called)\s+[«"“']?([^\s،.,«»"”'\n]{2,40})/i);
+    if (m && m[1].trim()) return m[1].trim();
+    return null;
+  }
+
+  function parsePrompt(text) {
+    var raw = String(text || '');
+    var lower = raw.toLowerCase();
+    var lang = /[؀-ۿ]/.test(raw) ? 'fa' : 'en';
+    var field = detectField(lower);
+    var accent = detectAccent(lower);
+    var brand = detectBrand(raw);
+    var cfg = { field: field, lang: lang };
+    if (brand) cfg.brand = brand;
+    if (accent) cfg.accent = accent;
+    if (raw.trim()) cfg.description = raw.trim().slice(0, 180);
+    return cfg; // pass through withDefaults to fill the rest from the preset
+  }
+
   return {
     generate: generate,
     withDefaults: withDefaults,
     presetFor: presetFor,
+    parsePrompt: parsePrompt,
     presets: PRESETS,
     util: { shift: shift, rgba: rgba, toHsl: toHsl }
   };
