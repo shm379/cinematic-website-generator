@@ -70,9 +70,13 @@ app.get('/api/site', (req, res) => {
   }
 });
 
-// --- Static files (panel, generator.js, demo, images, frames) ------------
+// --- Health check (for Docker / Coolify) ---------------------------------
+app.get('/healthz', (req, res) => res.json({ ok: true, service: 'cinemate' }));
+
+// --- Static files (landing, app.js, generator.js, builder, demo, assets) --
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/builder', (req, res) => res.sendFile(path.join(__dirname, 'public', 'builder.html')));
 
 /* Prefer port 3000; if busy, fall back to the next free port. The success
    line is logged on setImmediate and gated on server.listening so a trailing
@@ -93,9 +97,10 @@ function tryListen(port, triesLeft) {
   server.on('listening', function () {
     setImmediate(function () {
       if (!failed && server.listening) {
-        console.log('Cinematic Website Generator running at http://localhost:' + port);
-        console.log('  Panel:  http://localhost:' + port + '/');
-        console.log('  Demo:   http://localhost:' + port + '/demo');
+        console.log('Cinemate running at http://localhost:' + port);
+        console.log('  Home:    http://localhost:' + port + '/');
+        console.log('  Builder: http://localhost:' + port + '/builder');
+        console.log('  Demo:    http://localhost:' + port + '/demo');
       }
     });
   });
