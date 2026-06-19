@@ -1,5 +1,12 @@
 # Master Prompt — "TEA" Luxury Scroll-Driven Website
 
+> **Note:** This document is the canonical design spec for this style of site. It has been
+> operationalized into a **generator panel** — see [`README.md`](README.md) and
+> [`public/generator.js`](public/generator.js). The panel turns any *brand + field of work*
+> into a site that follows this spec, replacing the video-frame hero with a procedural,
+> scroll-driven canvas hero so it works for any field. This file stays as the reference for
+> the full design system (and for the frame-based `/demo` example).
+
 You are building a **luxury scroll-driven narrative website** for **TEA** — a premium Indian tea brand.
 
 Build it as a **single HTML file** (`public/index.html`) served by a local **Express server** (`server.js`) on `localhost:3000`. Plain HTML + CSS + JS — **no frameworks, no React, no TypeScript, no build step**. After building, run the server.

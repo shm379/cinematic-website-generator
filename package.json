@@ -1,7 +1,7 @@
 {
-  "name": "tea",
+  "name": "cinematic-website-generator",
   "version": "1.0.0",
-  "description": "TEA — luxury scroll-driven narrative website",
+  "description": "A panel that turns a brand + field of work into a cinematic scroll-driven website",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
