@@ -819,11 +819,23 @@
     }).join(' · ');
 
     // fonts
+    // For FA sites: self-hosted Vazirmatn @font-face (same-origin /fonts/…)
+    // so the site renders correctly even where Google Fonts is blocked (e.g.
+    // Iran) when hosted on our platform; the Google link stays as a fallback.
+    var vazirFace =
+      '<style>' +
+      "@font-face{font-family:'Vazirmatn';font-weight:300;font-display:swap;src:url('/fonts/vazirmatn/Vazirmatn-Light.woff2') format('woff2')}" +
+      "@font-face{font-family:'Vazirmatn';font-weight:400;font-display:swap;src:url('/fonts/vazirmatn/Vazirmatn-Regular.woff2') format('woff2')}" +
+      "@font-face{font-family:'Vazirmatn';font-weight:500;font-display:swap;src:url('/fonts/vazirmatn/Vazirmatn-Medium.woff2') format('woff2')}" +
+      "@font-face{font-family:'Vazirmatn';font-weight:600;font-display:swap;src:url('/fonts/vazirmatn/Vazirmatn-SemiBold.woff2') format('woff2')}" +
+      "@font-face{font-family:'Vazirmatn';font-weight:700;font-display:swap;src:url('/fonts/vazirmatn/Vazirmatn-Bold.woff2') format('woff2')}" +
+      '</style>\n';
+
     var fontLinks =
       '<link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
       '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
       (rtl
-        ? '<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet" />'
+        ? vazirFace + '<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet" />'
         : '<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />');
 
     // the runtime config the engine reads

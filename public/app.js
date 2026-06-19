@@ -157,6 +157,7 @@
   var STEPS = 6;
   var step = 0;
   var cfg = null; // current generation config
+  var brandTouched = false; // true only once the user types their own brand name
 
   function defaultCfg() {
     var p = CWG.presetFor('tea');
@@ -198,7 +199,9 @@
     wzFields.appendChild(c);
   });
   function selectField(f) {
-    var keepBrand = cfg && cfg.brand && cfg.brand !== 'برند تو' ? cfg.brand : null;
+    // Only carry the brand across fields if the user actually typed one;
+    // otherwise switch to the new field's preset brand so the preview follows.
+    var keepBrand = brandTouched && cfg && cfg.brand ? cfg.brand : null;
     var lang = cfg ? cfg.lang : 'fa';
     cfg = buildFromPreset(f, keepBrand, lang);
     $$('.field-card', wzFields).forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-field') === f); });
@@ -250,6 +253,8 @@
   }
   bind('#wzBrand', 'brand'); bind('#wzFieldLabel', 'fieldLabel');
   bind('#wzHeroTitle', 'heroTitle'); bind('#wzEyebrow', 'eyebrow'); bind('#wzCollTitle', 'collectionTitle');
+  // remember once the user has personalised the brand, so switching field keeps it
+  $('#wzBrand').addEventListener('input', function () { brandTouched = (this.value || '').trim().length > 0; });
   $('#wzCards').addEventListener('input', function (e) {
     var box = e.target.closest('.cardmini'); if (!box) return;
     var i = +box.getAttribute('data-i');
@@ -326,7 +331,9 @@
       var draft = null; try { draft = JSON.parse(localStorage.getItem('cinemate_draft') || 'null'); } catch (e) {}
       cfg = draft && draft.field ? draft : defaultCfg();
     }
-    syncForm(); preview(); showStep(cfg && cfg.field && cfg.brand !== 'برند تو' ? 0 : 0);
+    // a restored draft whose brand differs from its field's preset label was user-set
+    brandTouched = !!(cfg.brand && cfg.brand !== 'برند تو' && cfg.brand !== CWG.presetFor(cfg.field).label);
+    syncForm(); preview(); showStep(0);
     wizard.classList.add('show'); document.body.style.overflow = 'hidden';
   }
   function closeWizard() { wizard.classList.remove('show'); document.body.style.overflow = ''; }
