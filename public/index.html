@@ -1,986 +1,433 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>خشخاش — آرامش از دل طبیعت</title>
-<meta name="description" content="دمنوش خشخاش — یک جرعه. آرامشی که سال‌ها دوامش می‌آوری. از دل مزارع سرسبز ایران." />
-<meta name="theme-color" content="#030303" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23030303'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23f59e0b'/%3E%3C/svg%3E" />
-
+<title>سازنده‌ی وب‌سایت سینمایی — Cinematic Website Generator</title>
+<meta name="description" content="پنلی که با گفتنِ حوزه‌ی کاری و نام برندت، یک وب‌سایت سینمایی اسکرول‌محور برایت می‌سازد." />
+<meta name="theme-color" content="#0a0a0c" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0c'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23f59e0b'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600&display=swap" rel="stylesheet" />
-
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <style>
-/* ============================================================
-   TEA — base
-   ============================================================ */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-:root {
-  --bg: #030303;
-  --amber: #f59e0b;
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-html, body { background: var(--bg); }
-
-body {
-  font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #fff;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Persian text elements */
-.card-name, .card-blend, .card-ingredients, .card-meta, .card-price,
-.card-btn, .collection-eyebrow, .collection-title,
-.newsletter-title, .newsletter-sub, .newsletter-input, .newsletter-btn,
-.footer-brand, .footer-center, .footer-links,
-.header-brand, .header-shop, .loader-title, .loader-note,
-.brand-word, .oline, .card-badge {
-  font-family: 'Vazirmatn', sans-serif;
-  direction: rtl;
-}
-
-.card-name {
-  font-family: 'Vazirmatn', sans-serif;
-  font-size: clamp(24px, 3.2vw, 36px);
-  letter-spacing: 0.04em;
-  padding-left: 0;
-}
-
-.collection-title { direction: rtl; }
-.newsletter-title { direction: rtl; }
-.newsletter-sub   { direction: rtl; }
-
-.card-body { text-align: right; }
-.card-foot { text-align: right; }
-.card-price-row { direction: rtl; }
-.card-meta { direction: rtl; }
-
-.oline {
-  font-family: 'Vazirmatn', sans-serif;
-  font-style: normal;
-  direction: rtl;
-}
-
-body.loading { overflow: hidden; height: 100vh; }
-
-::selection { background: rgba(245, 158, 11, 0.25); color: #fff; }
-
-/* Lenis smooth scroll */
-html.lenis, html.lenis body { height: auto; }
-.lenis.lenis-smooth { scroll-behavior: auto !important; }
-.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
-.lenis.lenis-stopped { overflow: hidden; }
-.lenis.lenis-smooth iframe { pointer-events: none; }
-
-/* ============================================================
-   Loading screen
-   ============================================================ */
-#loader {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.8s ease;
-}
-#loader.hidden { opacity: 0; pointer-events: none; }
-
-.loader-title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: clamp(26px, 7vw, 48px);
-  font-weight: 500;
-  color: var(--amber);
-  letter-spacing: 0.22em;
-  padding-left: 0.22em;
-}
-
-.loader-bar-track {
-  width: 200px;
-  height: 2px;
-  margin-top: 32px;
-  background: rgba(245, 158, 11, 0.15);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.loader-bar-fill {
-  width: 0%;
-  height: 100%;
-  background: var(--amber);
-  transition: width 0.3s ease;
-}
-
-.loader-note {
-  margin-top: 18px;
-  font-size: 11px;
-  font-weight: 300;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-/* ============================================================
-   Fixed header
-   ============================================================ */
-#site-header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 64px;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 34px;
-}
-.header-brand {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--amber);
-  letter-spacing: 0.25em;
-  padding-left: 0.25em;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.8);
-  text-decoration: none;
-}
-.header-shop {
-  font-size: 11px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.6);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.35s var(--ease);
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.8);
-}
-
-/* ============================================================
-   Scroll progress bar (right edge)
-   ============================================================ */
-#progress-track {
-  position: fixed;
-  top: 0; right: 0;
-  width: 2px;
-  height: 100vh;
-  height: 100lvh;
-  z-index: 100;
-  background: rgba(245, 158, 11, 0.15);
-}
-#progress-fill {
-  width: 100%;
-  height: 100%;
-  background: rgba(245, 158, 11, 0.8);
-  transform: scaleY(0);
-  transform-origin: top;
-}
-
-/* ============================================================
-   Hero — scroll-driven video
-   ============================================================ */
-.hero {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  height: 100lvh;   /* large viewport height — stays full when the mobile
-                       address bar collapses (no bottom black gap) */
-  overflow: hidden;
-  background: #000;
-}
-#hero-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  z-index: 1;
-}
-
-/* hero text overlays */
-.overlay {
-  position: absolute;
-  z-index: 2;
-  pointer-events: none;
-  line-height: 1.16;
-  max-width: 42%;
-}
-.ov1 {
-  top: 11%;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  max-width: 92%;
-}
-.ov2 { left: 8%; bottom: 15%; text-align: left; }
-.ov3 { right: 8%; top: 50%; transform: translateY(-50%); text-align: right; }
-.ov4 { left: 8%;  top: 50%; transform: translateY(-50%); text-align: left; }
-.ov5 { left: 8%;  top: 16%; text-align: left; }
-
-.title-text {
-  display: inline-block;
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: clamp(40px, 9vw, 120px);
-  letter-spacing: 0.3em;
-  padding-left: 0.3em;
-  white-space: nowrap;
-  color: rgba(245, 158, 11, 0.9);
-  text-shadow: 0 2px 50px rgba(0, 0, 0, 0.9);
-  opacity: 0;
-}
-
-.oline {
-  display: block;
-  white-space: nowrap;
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 500;
-  font-size: clamp(24px, 4.6vw, 42px);
-  color: rgba(255, 255, 255, 0.88);
-  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.95), 0 0 70px rgba(0, 0, 0, 0.8);
-}
-.word { display: inline-block; opacity: 0; }
-
-/* hero brand mark — msadeghkarimi, shown centered just below the tea bag on the
-   opening frame; fades out the instant the hero starts scrolling */
-.brand-mark {
-  position: absolute;
-  z-index: 2;
-  left: 50%;
-  top: 83%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  pointer-events: none;
-}
-.brand-word {
-  display: block;
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: clamp(34px, 5.6vw, 80px);
-  letter-spacing: 0.16em;
-  padding-left: 0.16em;
-  white-space: nowrap;
-  color: rgba(245, 158, 11, 0.95);
-  text-shadow: 0 2px 50px rgba(0, 0, 0, 0.9);
-}
-
-/* ============================================================
-   Product collection
-   ============================================================ */
-.collection {
-  position: relative;
-  padding: 150px 34px 170px;
-  background:
-    radial-gradient(ellipse 62% 46% at 50% 0%, rgba(245, 158, 11, 0.06), transparent 72%),
-    var(--bg);
-}
-.collection-head { text-align: center; margin-bottom: 78px; }
-.collection-eyebrow {
-  display: block;
-  font-size: 10px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.4em;
-  padding-left: 0.4em;
-  color: var(--amber);
-}
-.collection-title {
-  margin-top: 16px;
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: clamp(30px, 5vw, 46px);
-  color: #fff;
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  gap: 26px;
-  max-width: 1120px;
-  margin: 0 auto;
-}
-
-.card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-  border-radius: 12px;
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3),
-              0 24px 50px -34px rgba(0, 0, 0, 0.9);
-  transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease);
-}
-.card-media {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  display: block;
-  transition: transform 0.5s var(--ease);
-}
-.card-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  padding: 32px 34px 34px;
-}
-.card-dawn  { background: linear-gradient(160deg, #1a0f0a, #2a1810); }
-.card-dusk  { background: linear-gradient(160deg, #0a0a0a, #1a0a00); }
-.card-night { background: linear-gradient(160deg, #050510, #0a0a1a); }
-
-.card-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 600;
-  font-size: clamp(30px, 3.6vw, 40px);
-  letter-spacing: 0.16em;
-  padding-left: 0.16em;
-  color: var(--amber);
-}
-.card-night .card-name { color: #fff; }
-
-.card-blend {
-  margin-top: 4px;
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.5);
-}
-.card-ingredients {
-  margin-top: 22px;
-  font-size: 13px;
-  font-weight: 300;
-  line-height: 1.7;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.card-foot { margin-top: auto; padding-top: 34px; }
-.card-price-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.card-price {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: clamp(26px, 3vw, 32px);
-  color: #fff;
-}
-.card-btn {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--amber);
-  background: transparent;
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  border-radius: 6px;
-  padding: 12px 16px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.35s var(--ease), color 0.35s var(--ease),
-              border-color 0.35s var(--ease);
-}
-.card-meta {
-  display: block;
-  margin-top: 22px;
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.3);
-}
-.card-badge {
-  position: absolute;
-  top: 20px; right: 20px;
-  z-index: 3;
-  font-size: 9px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  border-radius: 100px;
-  padding: 5px 10px;
-}
-
-/* ============================================================
-   Newsletter
-   ============================================================ */
-.newsletter {
-  position: relative;
-  padding: 168px 34px;
-  text-align: center;
-  background-image:
-    linear-gradient(to bottom,
-      rgba(3, 3, 3, 0.88) 0%, rgba(3, 3, 3, 0.60) 35%,
-      rgba(3, 3, 3, 0.65) 65%, rgba(3, 3, 3, 0.95) 100%),
-    url('newsletter-bg.jpg');
-  background-size: cover;
-  background-position: center;
-}
-.newsletter-title {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: clamp(34px, 6vw, 52px);
-  color: #fff;
-}
-.newsletter-sub {
-  margin-top: 16px;
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.45);
-}
-.newsletter-form {
-  margin-top: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.newsletter-input {
-  width: min(320px, 78vw);
-  padding: 12px 4px;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  color: #fff;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid rgba(245, 158, 11, 0.55);
-  outline: none;
-  transition: border-color 0.35s var(--ease);
-}
-.newsletter-input::placeholder { color: rgba(255, 255, 255, 0.3); }
-.newsletter-input:focus { border-bottom-color: var(--amber); }
-.newsletter-btn {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  color: var(--amber);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px 2px;
-  transition: opacity 0.3s ease;
-}
-.newsletter-btn span { border-bottom: 1px solid transparent; transition: border-color 0.3s ease; }
-
-/* ============================================================
-   Footer
-   ============================================================ */
-.site-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 22px;
-  padding: 42px 34px;
-  background: var(--bg);
-  border-top: 1px solid rgba(245, 158, 11, 0.15);
-}
-.footer-brand {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  padding-left: 0.2em;
-  color: var(--amber);
-}
-.footer-center {
-  font-size: 11px;
-  font-weight: 300;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.3);
-}
-.footer-links { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
-.footer-links a { color: inherit; text-decoration: none; transition: color 0.3s ease; }
-
-/* ============================================================
-   Responsive
-   ============================================================ */
-@media (min-width: 769px) {
-  .newsletter { background-attachment: fixed; }
-}
-@media (max-width: 768px) {
-  #site-header { padding: 0 20px; }
-  .collection { padding: 110px 22px 120px; }
-  .newsletter { padding: 120px 22px; }
-  .overlay { max-width: 84%; }
-  .ov2 { left: 7%; bottom: 12%; }
-  .ov3 { right: 7%; }
-  .ov4 { left: 7%; }
-  .ov5 { left: 7%; }
-}
-@media (max-width: 600px) {
-  .title-text { letter-spacing: 0.16em; padding-left: 0.16em; }
-  /* let full-sentence overlay lines wrap instead of clipping at the edge */
-  .oline { white-space: normal; }
-
-  /* product cards: stack price + button so the CTA goes full-width
-     (no overflow on narrow cards, and a far bigger tap target) */
-  .card-body { padding: 26px 24px 30px; }
-  .card-price-row { flex-direction: column; align-items: stretch; }
-  .card-btn { padding: 16px; }
-
-  .newsletter-btn { padding: 14px 10px; }
-
-  /* enlarge header link hit areas to ~44px for comfortable tapping */
-  .header-brand,
-  .header-shop { display: inline-flex; align-items: center; min-height: 44px; }
-}
-@media (max-width: 680px) {
-  .site-footer { flex-direction: column; text-align: center; gap: 16px; }
-}
-@media (max-width: 480px) {
-  #site-header { height: 56px; }
-}
-@media (max-width: 400px) {
-  /* keep hero overlay text clear of the screen edges on tiny phones */
-  .overlay { max-width: 90%; }
-  .ov2, .ov4, .ov5 { left: 5%; }
-  .ov3 { right: 5%; }
-}
-
-/* hover effects — applied only on devices with a real hover-capable pointer,
-   so they never get "stuck" after a tap on touchscreens */
-@media (hover: hover) {
-  .card:hover {
-    transform: translateY(-12px);
-    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.6),
-                0 36px 64px -28px rgba(0, 0, 0, 0.9),
-                0 0 60px -14px rgba(245, 158, 11, 0.28);
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#08080a; --panel:#0f0f12; --panel2:#15151a; --line:#26262e;
+    --accent:#f59e0b; --text:#f4f4f6; --muted:#9a9aa6; --faint:#6a6a76;
+    --ease:cubic-bezier(0.16,1,0.3,1);
   }
-  .card:hover .card-media { transform: scale(1.045); }
-  .header-shop:hover { color: var(--amber); }
-  .card-btn:hover {
-    background: var(--amber);
-    border-color: var(--amber);
-    color: #1a0f0a;
+  html,body{background:var(--bg)}
+  body{font-family:'Vazirmatn',sans-serif;color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  ::selection{background:rgba(245,158,11,.25)}
+
+  /* layout */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 26px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50;background:rgba(8,8,10,.86);backdrop-filter:blur(10px)}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px var(--accent)}
+  .brand b{font-weight:600;font-size:15px;letter-spacing:.02em}
+  .brand small{display:block;color:var(--faint);font-size:11px;font-weight:300}
+  .top-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+  .wrap{display:grid;grid-template-columns:minmax(340px,420px) 1fr;gap:0;min-height:calc(100vh - 61px)}
+  .controls{padding:24px 26px 80px;overflow:auto;border-left:1px solid var(--line)}
+  .stage{position:sticky;top:61px;height:calc(100vh - 61px);background:radial-gradient(ellipse 70% 50% at 50% 0%,rgba(245,158,11,.05),transparent 70%),#050506;display:flex;flex-direction:column}
+
+  /* hero blurb */
+  .lead{margin-bottom:22px}
+  .lead h1{font-size:21px;font-weight:600;line-height:1.5}
+  .lead p{margin-top:8px;color:var(--muted);font-size:13px;font-weight:300;line-height:1.8}
+
+  /* form */
+  .group{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:14px;overflow:hidden}
+  .group>summary{list-style:none;cursor:pointer;padding:15px 17px;font-size:13.5px;font-weight:500;display:flex;align-items:center;justify-content:space-between;user-select:none}
+  .group>summary::-webkit-details-marker{display:none}
+  .group>summary .chev{color:var(--faint);transition:transform .3s var(--ease);font-size:12px}
+  .group[open]>summary .chev{transform:rotate(90deg)}
+  .group .body{padding:4px 17px 18px;border-top:1px solid var(--line)}
+
+  label{display:block;font-size:12px;color:var(--muted);margin:13px 0 6px;font-weight:400}
+  input[type=text],input[type=email],textarea,select{
+    width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+    color:var(--text);font-family:inherit;font-size:13.5px;padding:11px 12px;outline:none;
+    transition:border-color .25s var(--ease);
   }
-  .newsletter-btn:hover span { border-bottom-color: var(--amber); }
-  .footer-links a:hover { text-decoration: underline; color: var(--amber); }
-}
+  textarea{resize:vertical;min-height:64px;line-height:1.7}
+  input:focus,textarea:focus,select:focus{border-color:rgba(245,158,11,.55)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .hint{font-size:11px;color:var(--faint);margin-top:5px;line-height:1.6}
+
+  /* field chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{font-size:12px;padding:8px 13px;border-radius:100px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer;transition:all .2s var(--ease)}
+  .chip:hover{border-color:rgba(245,158,11,.4);color:var(--text)}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#15100a;font-weight:600}
+
+  /* swatches */
+  .swatches{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .sw{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .2s var(--ease)}
+  .sw:hover{transform:scale(1.12)}
+  .sw.active{border-color:#fff}
+  input[type=color]{width:38px;height:30px;padding:2px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:var(--panel2);color:var(--muted);border:none;padding:9px 16px;font-family:inherit;font-size:12.5px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#15100a;font-weight:600}
+
+  /* buttons */
+  .btn{font-family:inherit;font-size:13px;font-weight:500;border-radius:10px;padding:11px 18px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);transition:all .2s var(--ease);display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:rgba(245,158,11,.5)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#15100a;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+
+  .build-row{display:flex;gap:10px;margin:6px 0 18px;flex-wrap:wrap}
+
+  /* card editor */
+  .cardset{border:1px dashed var(--line);border-radius:11px;padding:12px;margin-top:12px}
+  .cardset h4{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px}
+
+  /* preview stage */
+  .stage-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:rgba(15,15,18,.6)}
+  .stage-bar .meta{font-size:12px;color:var(--muted)}
+  .stage-bar .meta b{color:var(--text);font-weight:500}
+  .frame-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
+  .device{background:#000;border-radius:12px;box-shadow:0 30px 80px -30px rgba(0,0,0,.9),0 0 0 1px var(--line);overflow:hidden;transition:width .35s var(--ease),height .35s var(--ease)}
+  .device.desktop{width:100%;height:100%}
+  .device.mobile{width:390px;max-width:100%;height:96%}
+  iframe{width:100%;height:100%;border:none;display:block;background:#000}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#15100a;font-weight:600;font-size:13px;padding:11px 20px;border-radius:100px;opacity:0;pointer-events:none;transition:all .3s var(--ease);z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:920px){
+    .wrap{grid-template-columns:1fr}
+    .controls{border-left:none;border-bottom:1px solid var(--line)}
+    .stage{position:relative;top:0;height:80vh}
+  }
 </style>
 </head>
+<body>
 
-<body class="loading">
-
-<!-- ===================== Loading screen ===================== -->
-<div id="loader">
-  <div class="loader-title">خشخاش</div>
-  <div class="loader-bar-track"><div class="loader-bar-fill" id="loaderFill"></div></div>
-  <div class="loader-note">در حال آماده‌سازی آرامش شما...</div>
+<div class="top">
+  <div class="brand">
+    <span class="dot"></span>
+    <div><b>سازنده‌ی وب‌سایت سینمایی</b><small>حوزه‌ات را بگو، سایتت را بساز</small></div>
+  </div>
+  <div class="top-actions">
+    <a class="btn ghost" href="/demo" target="_blank" rel="noopener">نمونه‌ی واقعی ↗</a>
+    <button class="btn ghost" id="copyBtn">کپی کد</button>
+    <button class="btn ghost" id="openBtn">باز کردن در تب جدید</button>
+    <button class="btn primary" id="downloadBtn">دانلود HTML</button>
+  </div>
 </div>
 
-<!-- ===================== Fixed header ===================== -->
-<header id="site-header">
-  <a class="header-brand" href="#top">خشخاش</a>
-  <a class="header-shop" id="shopLink">سفارش</a>
-</header>
+<div class="wrap">
+  <!-- ============ CONTROLS ============ -->
+  <div class="controls">
+    <div class="lead">
+      <h1>وب‌سایتِ سینمایی‌ات را در چند ثانیه بساز.</h1>
+      <p>نام برند و حوزه‌ی کاری‌ات را وارد کن؛ یک وب‌سایت تک‌صفحه‌ای اسکرول‌محور با هیروی پروسیجرال، لودینگ، کالکشن، خبرنامه و فوتر — هم‌سبکِ نمونه — تولید می‌شود. همه‌چیز را می‌توانی ویرایش و در نهایت دانلود کنی.</p>
+    </div>
 
-<!-- ===================== Scroll progress bar ===================== -->
-<div id="progress-track"><div id="progress-fill"></div></div>
+    <!-- quick start -->
+    <details class="group" open>
+      <summary>۱ · شروع سریع <span class="chev">▸</span></summary>
+      <div class="body">
+        <label for="brand">نام برند</label>
+        <input type="text" id="brand" placeholder="مثلاً: خشخاش" value="برند تو" />
 
-<!-- ===================== Hero ===================== -->
-<section class="hero" id="top">
-  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+        <label>حوزه‌ی کاری</label>
+        <div class="chips" id="fieldChips"></div>
+        <label for="fieldLabel" style="margin-top:12px">برچسب حوزه (نمایشی)</label>
+        <input type="text" id="fieldLabel" placeholder="مثلاً: دمنوش گیاهی" />
 
-  <div class="brand-mark" id="ovBrand"><span class="brand-word">خشخاش</span></div>
+        <label>زبان و جهت</label>
+        <div class="seg" id="langSeg">
+          <button data-lang="fa" class="on">فارسی (RTL)</button>
+          <button data-lang="en">English (LTR)</button>
+        </div>
 
-  <div class="overlay ov1" id="ov1">
-    <span class="title-text">دمنوش</span>
-  </div>
+        <label>رنگ تأکید</label>
+        <div class="swatches" id="swatches">
+          <input type="color" id="accent" value="#f59e0b" />
+        </div>
+        <div class="hint">رنگ پایه از روی حوزه پیشنهاد می‌شود؛ می‌توانی تغییرش دهی.</div>
+      </div>
+    </details>
 
-  <div class="overlay ov2" id="ov2">
-    <span class="oline" data-split>یک جرعه.</span>
-    <span class="oline" data-split>حکمتی کهن درون.</span>
-  </div>
+    <div class="build-row">
+      <button class="btn primary" id="genBtn">↻ ساخت / به‌روزرسانی</button>
+      <button class="btn ghost" id="resetBtn">بازنشانی به پیش‌فرضِ حوزه</button>
+    </div>
 
-  <div class="overlay ov3" id="ov3">
-    <span class="oline" data-split>گل خشخاش. زعفران. گلاب.</span>
-    <span class="oline" data-split>هر برگ، بیدار.</span>
-  </div>
+    <!-- hero copy -->
+    <details class="group">
+      <summary>۲ · متن‌های هیرو <span class="chev">▸</span></summary>
+      <div class="body">
+        <label for="heroTitle">واژه‌ی بزرگ هیرو</label>
+        <input type="text" id="heroTitle" placeholder="مثلاً: دمنوش" />
+        <div class="hint">چهار «روایت» که هنگام اسکرول واژه‌به‌واژه ظاهر می‌شوند. هر خط را در یک سطر بنویس (حداکثر ۲ خط برای هر روایت).</div>
+        <label for="ov1">روایت ۱</label><textarea id="ov1"></textarea>
+        <label for="ov2">روایت ۲</label><textarea id="ov2"></textarea>
+        <label for="ov3">روایت ۳</label><textarea id="ov3"></textarea>
+        <label for="ov4">روایت ۴</label><textarea id="ov4"></textarea>
+      </div>
+    </details>
 
-  <div class="overlay ov4" id="ov4">
-    <span class="oline" data-split>آهسته دم می‌کشد.</span>
-    <span class="oline" data-split>اینجا چیزی عجله ندارد.</span>
-  </div>
+    <!-- collection -->
+    <details class="group">
+      <summary>۳ · محصولات / خدمات <span class="chev">▸</span></summary>
+      <div class="body">
+        <div class="row">
+          <div><label for="eyebrow">عنوان کوچک</label><input type="text" id="eyebrow" /></div>
+          <div><label for="collectionTitle">تیتر بخش</label><input type="text" id="collectionTitle" /></div>
+        </div>
+        <div id="cardsEditor"></div>
+      </div>
+    </details>
 
-  <div class="overlay ov5" id="ov5">
-    <span class="oline" data-split>گرم در دستانت.</span>
-    <span class="oline" data-split>آرامش از آنِ توست.</span>
-  </div>
-</section>
-
-<!-- ===================== Product collection ===================== -->
-<section class="collection" id="collection">
-  <div class="collection-head">
-    <span class="collection-eyebrow">مجموعه دمنوش‌ها</span>
-    <h2 class="collection-title">لحظه‌ات را انتخاب کن.</h2>
-  </div>
-
-  <div class="cards">
-    <article class="card card-dawn">
-      <img class="card-media" src="dawn.jpg" alt="دمنوش صبحگاهی خشخاش" loading="lazy" decoding="async" />
-      <div class="card-body">
-        <span class="card-name">سپیده‌دم</span>
-        <span class="card-blend">دمنوش بیداری بامدادی</span>
-        <p class="card-ingredients">گل خشخاش. نعناع. بهار نارنج. زنجبیل.</p>
-        <div class="card-foot">
-          <div class="card-price-row">
-            <span class="card-price">۱۸۵،۰۰۰ ت</span>
-            <button class="card-btn" type="button">سفارش بده</button>
-          </div>
-          <span class="card-meta">۲۰ پاکت · ارگانیک · محصول ایران</span>
+    <!-- newsletter + footer -->
+    <details class="group">
+      <summary>۴ · خبرنامه و فوتر <span class="chev">▸</span></summary>
+      <div class="body">
+        <label for="nlTitle">تیتر خبرنامه</label><input type="text" id="nlTitle" />
+        <label for="nlSub">زیرعنوان خبرنامه</label><input type="text" id="nlSub" />
+        <div class="row">
+          <div><label for="footerNote">جمله‌ی فوتر</label><input type="text" id="footerNote" /></div>
+          <div><label for="year">سال</label><input type="text" id="year" /></div>
+        </div>
+        <div class="row">
+          <div><label for="link1">لینک ۱</label><input type="text" id="link1" /></div>
+          <div><label for="link2">لینک ۲</label><input type="text" id="link2" /></div>
         </div>
       </div>
-    </article>
-
-    <article class="card card-dusk">
-      <span class="card-badge">پرفروش‌ترین</span>
-      <img class="card-media" src="dusk.jpg" alt="دمنوش غروب خشخاش" loading="lazy" decoding="async" />
-      <div class="card-body">
-        <span class="card-name">غروب</span>
-        <span class="card-blend">دمنوش آرامش عصرگاهی</span>
-        <p class="card-ingredients">گل خشخاش. گلاب. بابونه. هل.</p>
-        <div class="card-foot">
-          <div class="card-price-row">
-            <span class="card-price">۱۹۵،۰۰۰ ت</span>
-            <button class="card-btn" type="button">سفارش بده</button>
-          </div>
-          <span class="card-meta">۲۰ پاکت · ارگانیک · محصول ایران</span>
-        </div>
-      </div>
-    </article>
-
-    <article class="card card-night">
-      <img class="card-media" src="night.jpg" alt="دمنوش شبانه خشخاش" loading="lazy" decoding="async" />
-      <div class="card-body">
-        <span class="card-name">شبانه</span>
-        <span class="card-blend">دمنوش خواب عمیق</span>
-        <p class="card-ingredients">گل خشخاش. اسطوخودوس. سنبل‌الطیب. گل گاوزبان.</p>
-        <div class="card-foot">
-          <div class="card-price-row">
-            <span class="card-price">۲۱۰،۰۰۰ ت</span>
-            <button class="card-btn" type="button">سفارش بده</button>
-          </div>
-          <span class="card-meta">۲۰ پاکت · ارگانیک · محصول ایران</span>
-        </div>
-      </div>
-    </article>
+    </details>
   </div>
-</section>
 
-<!-- ===================== Newsletter ===================== -->
-<section class="newsletter">
-  <h2 class="newsletter-title nl-reveal">همراه مراسم باش.</h2>
-  <p class="newsletter-sub nl-reveal">اول بدان. بی‌سروصدا. فقط آرامش.</p>
-  <form class="newsletter-form nl-reveal" id="nlForm">
-    <input class="newsletter-input" type="email" placeholder="ایمیل شما" aria-label="ایمیل شما" />
-    <button class="newsletter-btn" type="submit"><span>شروع&nbsp;&rarr;</span></button>
-  </form>
-</section>
+  <!-- ============ STAGE ============ -->
+  <div class="stage">
+    <div class="stage-bar">
+      <span class="meta">پیش‌نمایش زنده — <b id="previewLabel">برند تو</b></span>
+      <div class="seg" id="deviceSeg">
+        <button data-dev="desktop" class="on">دسکتاپ</button>
+        <button data-dev="mobile">موبایل</button>
+      </div>
+    </div>
+    <div class="frame-wrap">
+      <div class="device desktop" id="device">
+        <iframe id="preview" title="پیش‌نمایش"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
 
-<!-- ===================== Footer ===================== -->
-<footer class="site-footer">
-  <span class="footer-brand">خشخاش</span>
-  <span class="footer-center">© ۱۴۰۴ خشخاش. ریشه در دل طبیعت ایران.</span>
-  <span class="footer-links">
-    <a href="#top">اینستاگرام</a> · <a href="#top">تلگرام</a>
-  </span>
-</footer>
+<div class="toast" id="toast">انجام شد</div>
 
-<!-- ===================== Scripts ===================== -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></script>
+<script src="/generator.js"></script>
 <script>
 (function () {
   'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { field: 'tea', lang: 'fa' };
 
-  /* ---------- config ---------- */
-  var TOTAL_FRAMES = 227;
-  function framePath(n) {
-    return 'frames/frame_' + String(n).padStart(4, '0') + '.jpg';
+  /* ---------- field chips ---------- */
+  var chipsEl = $('fieldChips');
+  var fields = Object.keys(CWG.presets).filter(function (k) { return k !== '_default'; });
+  fields.push('_default');
+  fields.forEach(function (f) {
+    var p = CWG.presetFor(f);
+    var b = document.createElement('button');
+    b.className = 'chip' + (f === state.field ? ' active' : '');
+    b.textContent = f === '_default' ? 'سایر / دلخواه' : p.label;
+    b.setAttribute('data-field', f);
+    b.addEventListener('click', function () { selectField(f); });
+    chipsEl.appendChild(b);
+  });
+
+  /* ---------- swatches ---------- */
+  var SW = ['#f59e0b', '#c98a5e', '#e6a4ad', '#e7c873', '#7fa8c9', '#e0613e', '#b6f24a', '#5fd3c4', '#8b7cf6', '#d8d2c8'];
+  var swEl = $('swatches');
+  SW.forEach(function (c) {
+    var s = document.createElement('span');
+    s.className = 'sw';
+    s.style.background = c;
+    s.setAttribute('data-c', c);
+    s.addEventListener('click', function () { $('accent').value = c; markSwatch(c); scheduleRender(); });
+    swEl.insertBefore(s, $('accent'));
+  });
+  function markSwatch(c) {
+    Array.prototype.forEach.call(document.querySelectorAll('.sw'), function (el) {
+      el.classList.toggle('active', el.getAttribute('data-c').toLowerCase() === String(c).toLowerCase());
+    });
   }
 
-  /* ---------- elements ---------- */
-  var canvas     = document.getElementById('hero-canvas');
-  var ctx        = canvas.getContext('2d', { alpha: false });
-  var loader     = document.getElementById('loader');
-  var loaderFill = document.getElementById('loaderFill');
-  var lenis      = null;
-
-  /* ---------- frame set (every 2nd frame on small screens) ---------- */
-  var lightMode = window.matchMedia('(max-width: 768px)').matches;
-  var stepSize  = lightMode ? 2 : 1;
-  var frameIndices = [];
-  for (var n = 1; n <= TOTAL_FRAMES; n += stepSize) frameIndices.push(n);
-  var N = frameIndices.length;
-
-  var frames  = new Array(N);
-  var settled = 0;
-
-  /* ---------- canvas sizing ---------- */
-  var cw = 0, ch = 0;
-  function sizeCanvas() {
-    /* The backing store must match the canvas's on-screen box or the frame
-       gets stretched. Width = live viewport. Height is read from
-       #progress-track — also 100lvh, but (unlike the pinned .hero, or the
-       canvas inside it, whose size ScrollTrigger locks) never resized by
-       ScrollTrigger, so it always reports the true large-viewport height.
-       window.innerHeight can't be used either — it shrinks with the mobile
-       address bar. */
-    var dpr   = Math.min(window.devicePixelRatio || 1, 2);
-    var track = document.getElementById('progress-track');
-    var w = document.documentElement.clientWidth || window.innerWidth;
-    var h = (track && track.clientHeight) || window.innerHeight;
-    cw = Math.max(1, Math.round(w * dpr));
-    ch = Math.max(1, Math.round(h * dpr));
-    canvas.width  = cw;
-    canvas.height = ch;
+  /* ---------- card editor ---------- */
+  function cardBlock(i) {
+    return '' +
+      '<div class="cardset" data-i="' + i + '">' +
+      '<h4>کارت ' + (i + 1) + '</h4>' +
+      '<div class="row"><div><label>نام</label><input type="text" class="c-name"></div>' +
+      '<div><label>زیرعنوان</label><input type="text" class="c-blend"></div></div>' +
+      '<label>توضیح</label><input type="text" class="c-desc">' +
+      '<div class="row"><div><label>قیمت</label><input type="text" class="c-price"></div>' +
+      '<div><label>متادیتا</label><input type="text" class="c-meta"></div></div>' +
+      '<label>نشان (اختیاری)</label><input type="text" class="c-badge">' +
+      '</div>';
   }
+  $('cardsEditor').innerHTML = cardBlock(0) + cardBlock(1) + cardBlock(2);
 
-  /* ---------- drawing (cover-fit, draw-on-change) ---------- */
-  var curFrame = -1;
-
-  function paint(i) {
-    var bmp = frames[i];
-    if (!bmp) {                                  /* nearest-ready fallback */
-      for (var d = 1; d < N; d++) {
-        if (i - d >= 0 && frames[i - d]) { bmp = frames[i - d]; break; }
-        if (i + d <  N && frames[i + d]) { bmp = frames[i + d]; break; }
-      }
+  /* ---------- load preset into the form ---------- */
+  function loadPreset(field, keepBrand) {
+    var p = CWG.presetFor(field);
+    if (!keepBrand) $('brand').value = $('brand').value || p.label;
+    $('fieldLabel').value = p.label;
+    $('accent').value = p.accent; markSwatch(p.accent);
+    $('heroTitle').value = p.heroTitle;
+    for (var k = 0; k < 4; k++) {
+      $('ov' + (k + 1)).value = (p.overlays[k] || []).join('\n');
     }
-    if (!bmp) return;
-    var iw = bmp.naturalWidth  || bmp.width;
-    var ih = bmp.naturalHeight || bmp.height;
-    var scale = Math.max(cw / iw, ch / ih);
-    var dw = iw * scale, dh = ih * scale;
-    ctx.drawImage(bmp, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
-  }
-
-  function render(f) {
-    var i = Math.round(f);
-    if (i < 0) i = 0;
-    else if (i > N - 1) i = N - 1;
-    if (i === curFrame) return;
-    curFrame = i;
-    paint(i);
-  }
-
-  function repaint() { paint(curFrame < 0 ? 0 : curFrame); }
-
-  /* ---------- frame loading ---------- */
-  function decode(blob) {
-    if (window.createImageBitmap) return createImageBitmap(blob);
-    return new Promise(function (res, rej) {
-      var img = new Image();
-      img.onload  = function () { res(img); };
-      img.onerror = rej;
-      img.src = URL.createObjectURL(blob);
-    });
-  }
-
-  function loadFrame(slot) {
-    return fetch(framePath(frameIndices[slot]))
-      .then(function (r) { if (!r.ok) throw new Error('frame'); return r.blob(); })
-      .then(decode)
-      .then(function (bmp) { frames[slot] = bmp; })
-      .catch(function () { frames[slot] = null; })
-      .then(function () {
-        settled++;
-        loaderFill.style.width = (settled / N * 100).toFixed(2) + '%';
-      });
-  }
-
-  /* ---------- word splitting for overlays ---------- */
-  function splitWords() {
-    var nodes = document.querySelectorAll('[data-split]');
-    Array.prototype.forEach.call(nodes, function (el) {
-      var words = el.textContent.trim().split(/\s+/);
-      el.textContent = '';
-      words.forEach(function (w, i) {
-        var s = document.createElement('span');
-        s.className = 'word';
-        s.textContent = w;
-        el.appendChild(s);
-        if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
-      });
-    });
-  }
-
-  /* ---------- scroll-driven animation ---------- */
-  function buildScroll() {
-    gsap.registerPlugin(ScrollTrigger);
-    ScrollTrigger.config({ ignoreMobileResize: true });
-
-    /* smooth scrolling — Lenis, driven by GSAP's ticker and synced to
-       ScrollTrigger. Keeps real native scroll, so the pinned hero and the
-       fixed header / progress bar / loader keep working. Chrome + Safari. */
-    if (window.Lenis) {
-      lenis = new Lenis({ lerp: 0.1 });
-      window.lenis = lenis;
-      lenis.on('scroll', ScrollTrigger.update);
-      gsap.ticker.add(function (t) { lenis.raf(t * 1000); });
-      gsap.ticker.lagSmoothing(0);
-      lenis.stop();   /* stay locked through the loader fade */
+    $('eyebrow').value = p.eyebrow;
+    $('collectionTitle').value = p.collectionTitle;
+    var sets = document.querySelectorAll('.cardset');
+    for (var i = 0; i < 3; i++) {
+      var it = p.items[i] || {};
+      var s = sets[i];
+      s.querySelector('.c-name').value = it.name || '';
+      s.querySelector('.c-blend').value = it.blend || '';
+      s.querySelector('.c-desc').value = it.desc || '';
+      s.querySelector('.c-price').value = it.price || '';
+      s.querySelector('.c-meta').value = it.meta || '';
+      s.querySelector('.c-badge').value = it.badge || '';
     }
-
-    var playhead = { f: 0 };
-
-    /* one master timeline: video playback + every text overlay, scrubbed by a
-       single pinned ScrollTrigger. The scroll distance is shorter on phones so
-       the hero isn't an endless swipe; all timeline beats live in timeline
-       units (0-100), so they auto-rescale to whatever distance is used. */
-    var heroEnd = lightMode ? '+=320%' : '+=700%';
-    var master = gsap.timeline({
-      scrollTrigger: {
-        trigger: '.hero',
-        start: 'top top',
-        end: heroEnd,
-        pin: true,
-        scrub: 0.4,
-        invalidateOnRefresh: true
-      }
-    });
-
-    /* frame playback across the full hero (timeline units = % of hero) */
-    master.to(playhead, {
-      f: N - 1,
-      ease: 'none',
-      duration: 100,
-      onUpdate: function () { render(playhead.f); }
-    }, 0);
-
-    /* overlay helpers */
-    function overlayIn(sel, at, stg) {
-      master.fromTo(sel + ' .word',
-        { autoAlpha: 0, yPercent: 60 },
-        { autoAlpha: 1, yPercent: 0, ease: 'power2.out', duration: 1.6, stagger: stg },
-        at);
-    }
-    function overlayOut(sel, at) {
-      master.to(sel, { autoAlpha: 0, ease: 'power1.in', duration: 3 }, at);
-    }
-
-    /* ovBrand — msadeghkarimi brand mark; visible on the opening frame, fades
-       out the instant the hero starts scrolling (gone by ~4% of hero) */
-    master.to('#ovBrand', { autoAlpha: 0, ease: 'power2.out', duration: 4 }, 0);
-
-    /* ov1 — TEA (in 5%, out 15%) */
-    master.fromTo('#ov1 .title-text',
-      { autoAlpha: 0, yPercent: 30 },
-      { autoAlpha: 1, yPercent: 0, ease: 'power2.out', duration: 2.4 }, 5);
-    master.to('#ov1', { autoAlpha: 0, ease: 'power1.in', duration: 2.2 }, 15);
-
-    /* ov2..ov5 — word-by-word, synced to the film's beats */
-    overlayIn('#ov2', 18, 1.3); overlayOut('#ov2', 31);   /* the single bag   */
-    overlayIn('#ov3', 40, 1.3); overlayOut('#ov3', 52);   /* the burst        */
-    overlayIn('#ov4', 60, 1.3); overlayOut('#ov4', 72);   /* the steeping     */
-    overlayIn('#ov5', 84, 1.0); overlayOut('#ov5', 94);   /* held in hands    */
-
-    /* right-edge scroll progress */
-    gsap.fromTo('#progress-fill',
-      { scaleY: 0 },
-      { scaleY: 1, ease: 'none', scrollTrigger: { start: 0, end: 'max', scrub: 0.3 } });
-
-    /* product cards reveal */
-    gsap.from('.card', {
-      autoAlpha: 0, yPercent: 14, duration: 1, ease: 'power2.out', stagger: 0.14,
-      scrollTrigger: { trigger: '.collection', start: 'top 72%' }
-    });
-
-    /* newsletter reveal */
-    gsap.from('.nl-reveal', {
-      autoAlpha: 0, y: 28, duration: 1, ease: 'power2.out', stagger: 0.12,
-      scrollTrigger: { trigger: '.newsletter', start: 'top 70%' }
-    });
+    $('nlTitle').value = p.newsletterTitle;
+    $('nlSub').value = p.newsletterSub;
+    $('footerNote').value = p.footerNote;
+    $('year').value = state.lang === 'en' ? '2026' : '۱۴۰۵';
+    var links = state.lang === 'en'
+      ? ['Instagram', 'Contact'] : ['اینستاگرام', 'تماس'];
+    $('link1').value = links[0]; $('link2').value = links[1];
   }
+
+  function selectField(f) {
+    state.field = f;
+    Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (el) {
+      el.classList.toggle('active', el.getAttribute('data-field') === f);
+    });
+    loadPreset(f, true);
+    render();
+  }
+
+  /* ---------- language ---------- */
+  Array.prototype.forEach.call($('langSeg').children, function (btn) {
+    btn.addEventListener('click', function () {
+      state.lang = btn.getAttribute('data-lang');
+      Array.prototype.forEach.call($('langSeg').children, function (b) { b.classList.toggle('on', b === btn); });
+      scheduleRender();
+    });
+  });
+
+  /* ---------- device toggle ---------- */
+  Array.prototype.forEach.call($('deviceSeg').children, function (btn) {
+    btn.addEventListener('click', function () {
+      var dev = btn.getAttribute('data-dev');
+      $('device').className = 'device ' + dev;
+      Array.prototype.forEach.call($('deviceSeg').children, function (b) { b.classList.toggle('on', b === btn); });
+    });
+  });
+
+  /* ---------- collect config from the form ---------- */
+  function lines(id) {
+    return $(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 2);
+  }
+  function buildConfig() {
+    var overlays = [lines('ov1'), lines('ov2'), lines('ov3'), lines('ov4')]
+      .filter(function (a) { return a.length; });
+    var sets = document.querySelectorAll('.cardset');
+    var items = Array.prototype.map.call(sets, function (s) {
+      return {
+        name: s.querySelector('.c-name').value,
+        blend: s.querySelector('.c-blend').value,
+        desc: s.querySelector('.c-desc').value,
+        price: s.querySelector('.c-price').value,
+        meta: s.querySelector('.c-meta').value,
+        badge: s.querySelector('.c-badge').value || null
+      };
+    });
+    var fl = [];
+    if ($('link1').value) fl.push({ label: $('link1').value, href: '#top' });
+    if ($('link2').value) fl.push({ label: $('link2').value, href: '#top' });
+    return {
+      brand: $('brand').value || 'برند',
+      field: state.field,
+      fieldLabel: $('fieldLabel').value,
+      lang: state.lang,
+      accent: $('accent').value,
+      heroTitle: $('heroTitle').value,
+      overlays: overlays,
+      eyebrow: $('eyebrow').value,
+      collectionTitle: $('collectionTitle').value,
+      items: items,
+      newsletterTitle: $('nlTitle').value,
+      newsletterSub: $('nlSub').value,
+      footerNote: $('footerNote').value,
+      year: $('year').value,
+      footerLinks: fl
+    };
+  }
+
+  /* ---------- render preview ---------- */
+  var lastHtml = '';
+  function render() {
+    var cfg = buildConfig();
+    lastHtml = CWG.generate(cfg);
+    $('preview').srcdoc = lastHtml;
+    $('previewLabel').textContent = cfg.brand;
+    markSwatch($('accent').value);
+  }
+  var rt;
+  function scheduleRender() { clearTimeout(rt); rt = setTimeout(render, 350); }
+
+  /* live updates on any input/textarea/select change */
+  Array.prototype.forEach.call(document.querySelectorAll('input, textarea'), function (el) {
+    el.addEventListener('input', scheduleRender);
+  });
+  $('genBtn').addEventListener('click', render);
+  $('resetBtn').addEventListener('click', function () { loadPreset(state.field, false); render(); });
+
+  /* ---------- export actions ---------- */
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 1700);
+  }
+  function safeName() {
+    var b = ($('brand').value || 'site').trim().replace(/\s+/g, '-');
+    return (/[a-z0-9]/i.test(b) ? b : 'cinematic-site') + '.html';
+  }
+  $('downloadBtn').addEventListener('click', function () {
+    if (!lastHtml) render();
+    var blob = new Blob([lastHtml], { type: 'text/html;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = safeName();
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    toast('فایل HTML دانلود شد');
+  });
+  $('openBtn').addEventListener('click', function () {
+    if (!lastHtml) render();
+    var blob = new Blob([lastHtml], { type: 'text/html;charset=utf-8' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  });
+  $('copyBtn').addEventListener('click', function () {
+    if (!lastHtml) render();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lastHtml).then(function () { toast('کد کپی شد'); });
+    } else { toast('کپی پشتیبانی نمی‌شود'); }
+  });
 
   /* ---------- boot ---------- */
-  function init() {
-    document.body.classList.add('loading');
-    window.scrollTo(0, 0);
-    sizeCanvas();
-    splitWords();
-
-    var fontsReady = (document.fonts && document.fonts.ready)
-      ? document.fonts.ready : Promise.resolve();
-
-    var jobs = [];
-    for (var s = 0; s < N; s++) jobs.push(loadFrame(s));
-
-    /* preload the newsletter background + product card images */
-    ['newsletter-bg.jpg', 'dawn.jpg', 'dusk.jpg', 'night.jpg'].forEach(function (src) {
-      jobs.push(new Promise(function (res) {
-        var img = new Image();
-        img.onload = img.onerror = function () { res(); };
-        img.src = src;
-      }));
-    });
-
-    Promise.all(jobs)
-      .then(function () { return fontsReady; })
-      .then(function () {
-        sizeCanvas();
-        render(0);
-        buildScroll();
-
-        loader.classList.add('hidden');
-        setTimeout(function () {
-          document.body.classList.remove('loading');
-          loader.style.display = 'none';
-          if (lenis) lenis.start();
-          requestAnimationFrame(function () { ScrollTrigger.refresh(); });
-        }, 850);
-      });
-  }
-
-  /* ---------- resize (debounced) ---------- */
-  /* On phones, scrolling shows/hides the address bar, firing 'resize' with a
-     height-only change. Refreshing ScrollTrigger on those re-pins the hero and
-     causes a visible jump — so on mobile we only react to real width changes
-     (orientation / true resize). The hero is 100svh, so ignoring the address
-     bar leaves no gap. */
-  var resizeTimer, lastW = window.innerWidth;
-  window.addEventListener('resize', function () {
-    if (lightMode && window.innerWidth === lastW) return;
-    lastW = window.innerWidth;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () {
-      sizeCanvas();
-      repaint();
-      if (window.ScrollTrigger) ScrollTrigger.refresh();
-    }, 160);
-  });
-
-  /* ---------- header SHOP jump + form guard ---------- */
-  var shop = document.getElementById('shopLink');
-  if (shop) shop.addEventListener('click', function () {
-    var c = document.getElementById('collection');
-    if (!c) return;
-    if (lenis) lenis.scrollTo(c, { duration: 1.5 });
-    else window.scrollTo(0, c.getBoundingClientRect().top + window.pageYOffset);
-  });
-  var nlForm = document.getElementById('nlForm');
-  if (nlForm) nlForm.addEventListener('submit', function (e) { e.preventDefault(); });
-
-  /* ---------- go ---------- */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  loadPreset(state.field, true);
+  render();
 })();
 </script>
 </body>
