@@ -28,6 +28,11 @@ services:
       - PORT=3000
       # Coolify magic var → generates an FQDN and proxies it to web:3000.
       - SERVICE_FQDN_WEB_3000
+      # Optional AI keys — set these in Coolify (passed through from the host
+      # env). Without them the app still works (image gen disabled; mega-prompt
+      # uses the keyless heuristic parser).
+      - OPENAI_API_KEY
+      - ANTHROPIC_API_KEY
     # Coolify's proxy routes to this exposed container port over the Docker
     # network (no host binding needed).
     expose:

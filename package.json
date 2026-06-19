@@ -12,5 +12,8 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^5.2.1"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.105.0"
   }
 }
