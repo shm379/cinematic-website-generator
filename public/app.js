@@ -1,0 +1,385 @@
+/*
+ * Cinemate — landing + onboarding app
+ * -----------------------------------
+ * Drives the homepage (hero live preview, showcase, pricing), a simulated
+ * auth modal, and a 6-step onboarding wizard that takes the user from
+ * "what's your field" to a finished, downloadable / publishable cinematic
+ * site. All generation is client-side via /generator.js (window.CWG).
+ *
+ * Auth + hosting are front-end flows (no backend persistence). Hosting the
+ * platform itself is done with Docker/Coolify (see Dockerfile & README);
+ * the in-app "publish" gives a believable live URL and is wired so a real
+ * hosting backend can drop in later.
+ */
+(function () {
+  'use strict';
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  /* ---------- field metadata (emoji + label) ---------- */
+  var EMOJI = {
+    tea: '🍵', coffee: '☕', perfume: '🌸', jewelry: '💎', realestate: '🏛️',
+    restaurant: '🍽️', fitness: '🏋️', clinic: '🩺', tech: '🚀', fashion: '👗', _default: '✦'
+  };
+  var FIELDS = Object.keys(CWG.presets);
+
+  /* ---------- toast ---------- */
+  var toastEl = $('#toast'), toastT;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove('show'); }, 1900);
+  }
+
+  /* ---------- hero mock preview ---------- */
+  var mockFields = ['perfume', 'tea', 'jewelry', 'restaurant', 'tech'];
+  var mockBrands = { perfume: 'رایحه', tea: 'خشخاش', jewelry: 'Aurum', restaurant: 'آتش', tech: 'Nova' };
+  var mockSwitch = $('#mockSwitch');
+  function slug(s) {
+    var x = String(s || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    return x || 'yourbrand';
+  }
+  function loadMock(field) {
+    var brand = mockBrands[field] || 'برند';
+    $('#mockFrame').srcdoc = CWG.generate({ field: field, brand: brand });
+    $('#mockUrl').textContent = slug(mockBrands[field] || field) + '.cinemate.site';
+    $$('.mock-chip', mockSwitch).forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-f') === field); });
+  }
+  mockFields.forEach(function (f, i) {
+    var b = document.createElement('button');
+    b.className = 'mock-chip' + (i === 0 ? ' on' : '');
+    b.setAttribute('data-f', f);
+    b.textContent = (EMOJI[f] || '') + ' ' + CWG.presetFor(f).label;
+    b.addEventListener('click', function () { loadMock(f); });
+    mockSwitch.appendChild(b);
+  });
+  loadMock(mockFields[0]);
+
+  /* ---------- showcase (lazy live thumbnails) ---------- */
+  var showItems = [
+    { field: 'perfume', brand: 'رایحه' }, { field: 'jewelry', brand: 'Aurum' },
+    { field: 'restaurant', brand: 'آتش' }, { field: 'fitness', brand: 'Iron' },
+    { field: 'tech', brand: 'Nova' }, { field: 'coffee', brand: 'قهوه‌خانه' }
+  ];
+  var LW = 1200, LH = 750; // logical thumbnail render size (16:10)
+  var showGrid = $('#showGrid');
+  showItems.forEach(function (it) {
+    var p = CWG.presetFor(it.field);
+    var card = document.createElement('div');
+    card.className = 'show';
+    card.innerHTML =
+      '<div class="thumb" style="background:linear-gradient(135deg,' + p.bg + ',#000)">' +
+        '<iframe scrolling="no" tabindex="-1"></iframe><div class="veil"></div>' +
+      '</div>' +
+      '<div class="cap"><div><b>' + (EMOJI[it.field] || '') + ' ' + it.brand + '</b> ' +
+        '<span>' + p.label + '</span></div><span class="go">باز کردن ↗</span></div>';
+    card.addEventListener('click', function () {
+      var blob = new Blob([CWG.generate(it)], { type: 'text/html;charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
+    });
+    showGrid.appendChild(card);
+    card._cfg = it;
+  });
+  function fitThumb(frame) {
+    var thumb = frame.parentElement;
+    var s = thumb.clientWidth / LW;
+    frame.style.width = LW + 'px'; frame.style.height = LH + 'px';
+    frame.style.transformOrigin = 'top left'; frame.style.left = '0'; frame.style.right = 'auto';
+    frame.style.transform = 'scale(' + s + ')';
+  }
+  // lazy-load showcase iframes when near viewport (staggered)
+  var ioDelay = 0;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var card = e.target, frame = $('iframe', card);
+      io.unobserve(card);
+      ioDelay += 350;
+      setTimeout(function () {
+        frame.srcdoc = CWG.generate(card._cfg);
+        frame.addEventListener('load', function () { fitThumb(frame); });
+        fitThumb(frame);
+      }, ioDelay);
+    });
+  }, { rootMargin: '120px' });
+  $$('.show', showGrid).forEach(function (c) { io.observe(c); });
+  window.addEventListener('resize', function () { $$('.show iframe', showGrid).forEach(fitThumb); });
+
+  /* ============================================================
+     AUTH (simulated)
+     ============================================================ */
+  var authOverlay = $('#authOverlay');
+  function openAuth() {
+    var u = getUser();
+    if (u) { openWizard(); return; }
+    authOverlay.classList.add('show');
+  }
+  function closeAuth() { authOverlay.classList.remove('show'); }
+  function getUser() { try { return JSON.parse(localStorage.getItem('cinemate_user') || 'null'); } catch (e) { return null; } }
+
+  $('#authClose').addEventListener('click', closeAuth);
+  authOverlay.addEventListener('click', function (e) { if (e.target === authOverlay) closeAuth(); });
+
+  var authMode = 'signup';
+  $$('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      authMode = b.getAttribute('data-tab');
+      $$('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      $('#authTitle').textContent = authMode === 'signup' ? 'به Cinemate خوش آمدی' : 'خوش برگشتی';
+      $('#nameField').style.display = authMode === 'signup' ? '' : 'none';
+      $('#auSubmit').textContent = authMode === 'signup' ? 'ساختِ حساب و شروع →' : 'ورود و ادامه →';
+    });
+  });
+  $('#auSubmit').addEventListener('click', function () {
+    var email = $('#auEmail').value.trim();
+    var name = $('#auName').value.trim();
+    if (!email || email.indexOf('@') < 0) { toast('یک ایمیلِ معتبر وارد کن'); return; }
+    if (!$('#auPass').value) { toast('رمز عبور را وارد کن'); return; }
+    localStorage.setItem('cinemate_user', JSON.stringify({ name: name || email.split('@')[0], email: email }));
+    closeAuth(); toast('خوش آمدی، ' + (name || 'دوست عزیز') + '!'); openWizard();
+  });
+  $('#auGuest').addEventListener('click', function () {
+    localStorage.setItem('cinemate_user', JSON.stringify({ name: 'مهمان', guest: true }));
+    closeAuth(); openWizard();
+  });
+
+  $('#navStart').addEventListener('click', openAuth);
+  $('#heroStart').addEventListener('click', openAuth);
+  $('#finalStart').addEventListener('click', openAuth);
+  $('#navSignin').addEventListener('click', function () { $$('.tabs button')[1].click(); authOverlay.classList.add('show'); });
+  $('#ftHost').addEventListener('click', function (e) { e.preventDefault(); openAuth(); });
+  $$('[data-plan]').forEach(function (b) {
+    b.addEventListener('click', function () { window._plan = b.getAttribute('data-plan'); openAuth(); });
+  });
+
+  /* ============================================================
+     WIZARD
+     ============================================================ */
+  var STEPS = 6;
+  var step = 0;
+  var cfg = null; // current generation config
+
+  function defaultCfg() {
+    var p = CWG.presetFor('tea');
+    return buildFromPreset('tea', 'برند تو', 'fa');
+  }
+  function buildFromPreset(field, brand, lang) {
+    var p = CWG.presetFor(field);
+    return {
+      field: field, brand: brand || p.label, fieldLabel: p.label, lang: lang || 'fa',
+      accent: p.accent, motif: Object.assign({}, p.motif),
+      heroTitle: p.heroTitle, overlays: p.overlays.map(function (a) { return a.slice(); }),
+      eyebrow: p.eyebrow, collectionTitle: p.collectionTitle,
+      items: p.items.map(function (it) { return Object.assign({}, it); }),
+      newsletterTitle: p.newsletterTitle, newsletterSub: p.newsletterSub, footerNote: p.footerNote
+    };
+  }
+
+  // stepper segments
+  var stepper = $('#stepper');
+  for (var i = 0; i < STEPS; i++) { var s = document.createElement('div'); s.className = 'seg'; stepper.appendChild(s); }
+  function paintStepper() {
+    $$('.seg', stepper).forEach(function (el, i) {
+      el.classList.toggle('done', i < step);
+      el.classList.toggle('cur', i === step);
+    });
+  }
+
+  /* ----- field grid (step 1) ----- */
+  var wzFields = $('#wzFields');
+  FIELDS.forEach(function (f) {
+    var p = CWG.presetFor(f);
+    var c = document.createElement('div');
+    c.className = 'field-card';
+    c.setAttribute('data-field', f);
+    c.innerHTML = '<span class="emo">' + (EMOJI[f] || '✦') + '</span><div><b>' +
+      (f === '_default' ? 'سایر / دلخواه' : p.label) + '</b><span>' +
+      (p.heroTitle || '') + '</span></div>';
+    c.addEventListener('click', function () { selectField(f); });
+    wzFields.appendChild(c);
+  });
+  function selectField(f) {
+    var keepBrand = cfg && cfg.brand && cfg.brand !== 'برند تو' ? cfg.brand : null;
+    var lang = cfg ? cfg.lang : 'fa';
+    cfg = buildFromPreset(f, keepBrand, lang);
+    $$('.field-card', wzFields).forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-field') === f); });
+    syncForm(); preview();
+  }
+
+  /* ----- swatches (step 3) ----- */
+  var SW = ['#f59e0b', '#c98a5e', '#e6a4ad', '#e7c873', '#7fa8c9', '#e0613e', '#b6f24a', '#5fd3c4', '#8b5cf6', '#d8d2c8'];
+  var wzSw = $('#wzSwatches');
+  SW.forEach(function (c) {
+    var el = document.createElement('span'); el.className = 'sw'; el.style.background = c; el.setAttribute('data-c', c);
+    el.addEventListener('click', function () { cfg.accent = c; $('#wzAccent').value = c; markSw(); preview(); });
+    wzSw.insertBefore(el, $('#wzAccent'));
+  });
+  function markSw() { $$('.sw', wzSw).forEach(function (el) { el.classList.toggle('on', (el.getAttribute('data-c') || '').toLowerCase() === (cfg.accent || '').toLowerCase()); }); }
+  $('#wzAccent').addEventListener('input', function () { cfg.accent = this.value; markSw(); previewDebounced(); });
+
+  /* ----- motif (step 3) ----- */
+  $$('#wzMotif button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      cfg.motif = Object.assign({}, cfg.motif, { shape: b.getAttribute('data-motif') });
+      $$('#wzMotif button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      preview();
+    });
+  });
+
+  /* ----- language (step 2) ----- */
+  $$('#wzLang button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      cfg.lang = b.getAttribute('data-lang');
+      $$('#wzLang button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      previewDebounced();
+    });
+  });
+
+  /* ----- card editors (step 4) ----- */
+  var wzCards = $('#wzCards');
+  for (var k = 0; k < 3; k++) {
+    var d = document.createElement('div'); d.className = 'cardmini'; d.setAttribute('data-i', k);
+    d.innerHTML = '<h5>کارت ' + (k + 1) + '</h5>' +
+      '<div class="wz-row"><input class="wz-input c-name" placeholder="نام"><input class="wz-input c-price" placeholder="قیمت"></div>' +
+      '<input class="wz-input c-desc" style="margin-top:10px" placeholder="توضیح کوتاه">';
+    wzCards.appendChild(d);
+  }
+
+  /* ----- simple text inputs bound to cfg ----- */
+  function bind(id, key) {
+    $(id).addEventListener('input', function () { cfg[key] = this.value; previewDebounced(); });
+  }
+  bind('#wzBrand', 'brand'); bind('#wzFieldLabel', 'fieldLabel');
+  bind('#wzHeroTitle', 'heroTitle'); bind('#wzEyebrow', 'eyebrow'); bind('#wzCollTitle', 'collectionTitle');
+  $('#wzCards').addEventListener('input', function (e) {
+    var box = e.target.closest('.cardmini'); if (!box) return;
+    var i = +box.getAttribute('data-i');
+    if (e.target.classList.contains('c-name')) cfg.items[i].name = e.target.value;
+    if (e.target.classList.contains('c-price')) cfg.items[i].price = e.target.value;
+    if (e.target.classList.contains('c-desc')) cfg.items[i].desc = e.target.value;
+    previewDebounced();
+  });
+
+  /* ----- push cfg → form fields ----- */
+  function syncForm() {
+    $('#wzBrand').value = cfg.brand || '';
+    $('#wzFieldLabel').value = cfg.fieldLabel || '';
+    $('#wzHeroTitle').value = cfg.heroTitle || '';
+    $('#wzEyebrow').value = cfg.eyebrow || '';
+    $('#wzCollTitle').value = cfg.collectionTitle || '';
+    $('#wzAccent').value = cfg.accent || '#f59e0b'; markSw();
+    $$('#wzMotif button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-motif') === (cfg.motif && cfg.motif.shape)); });
+    $$('#wzLang button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-lang') === cfg.lang); });
+    $$('.field-card', wzFields).forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-field') === cfg.field); });
+    $$('.cardmini', wzCards).forEach(function (box, i) {
+      var it = cfg.items[i] || {};
+      $('.c-name', box).value = it.name || '';
+      $('.c-price', box).value = it.price || '';
+      $('.c-desc', box).value = it.desc || '';
+    });
+  }
+
+  /* ----- live preview ----- */
+  var lastHtml = '';
+  function preview() {
+    lastHtml = CWG.generate(cfg);
+    $('#wzFrame').srcdoc = lastHtml;
+    try { localStorage.setItem('cinemate_draft', JSON.stringify(cfg)); } catch (e) {}
+    fillReview();
+  }
+  var pvT; function previewDebounced() { clearTimeout(pvT); pvT = setTimeout(preview, 380); }
+
+  function fillReview() {
+    $('#rvBrand').textContent = cfg.brand || '—';
+    $('#rvField').textContent = (EMOJI[cfg.field] || '') + ' ' + CWG.presetFor(cfg.field).label;
+    $('#rvLang').textContent = cfg.lang === 'en' ? 'English (LTR)' : 'فارسی (RTL)';
+    $('#rvAccent').textContent = cfg.accent;
+  }
+
+  /* ----- device toggle (preview) ----- */
+  $$('#wzDevseg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $('#wzDevice').classList.toggle('mob', b.getAttribute('data-dev') === 'mob');
+      $$('#wzDevseg button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    });
+  });
+
+  /* ----- step navigation ----- */
+  function showStep(n) {
+    step = Math.max(0, Math.min(STEPS - 1, n));
+    $$('.wz-step').forEach(function (el) { el.classList.toggle('on', +el.getAttribute('data-step') === step); });
+    paintStepper();
+    $('#wzBack').style.visibility = step === 0 ? 'hidden' : 'visible';
+    $('#wzNext').textContent = step === STEPS - 1 ? 'پایان ✓' : 'بعدی ←';
+    $('.wz-main').scrollTop = 0;
+  }
+  $('#wzNext').addEventListener('click', function () {
+    if (step === 0 && !cfg) { toast('یک حوزه انتخاب کن'); return; }
+    if (step === STEPS - 1) { closeWizard(); toast('سایتت آماده است — هر زمان می‌توانی برگردی'); return; }
+    showStep(step + 1);
+  });
+  $('#wzBack').addEventListener('click', function () { showStep(step - 1); });
+
+  /* ----- open / close ----- */
+  var wizard = $('#wizard');
+  function openWizard() {
+    if (!cfg) {
+      var draft = null; try { draft = JSON.parse(localStorage.getItem('cinemate_draft') || 'null'); } catch (e) {}
+      cfg = draft && draft.field ? draft : defaultCfg();
+    }
+    syncForm(); preview(); showStep(cfg && cfg.field && cfg.brand !== 'برند تو' ? 0 : 0);
+    wizard.classList.add('show'); document.body.style.overflow = 'hidden';
+  }
+  function closeWizard() { wizard.classList.remove('show'); document.body.style.overflow = ''; }
+  $('#wzClose').addEventListener('click', closeWizard);
+
+  /* ----- delivery ----- */
+  function freshHtml() { lastHtml = CWG.generate(cfg); return lastHtml; }
+  $('#dlDownload').addEventListener('click', function () {
+    var blob = new Blob([freshHtml()], { type: 'text/html;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = (slug(cfg.brand) || 'cinematic-site') + '.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    toast('فایل HTML دانلود شد ⬇');
+  });
+  $('#dlOpen').addEventListener('click', function () {
+    var blob = new Blob([freshHtml()], { type: 'text/html;charset=utf-8' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  });
+  $('#dlCopy').addEventListener('click', function () {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(freshHtml()).then(function () { toast('کد کپی شد ⧉'); });
+    else toast('کپی پشتیبانی نمی‌شود');
+  });
+
+  /* ----- hosting (simulated publish) ----- */
+  var hostMode = 'sub';
+  $$('#hostGrid .host').forEach(function (h) {
+    h.addEventListener('click', function () {
+      hostMode = h.getAttribute('data-host');
+      $$('#hostGrid .host').forEach(function (x) { x.classList.toggle('on', x === h); });
+      $('#hostName').placeholder = hostMode === 'custom' ? 'دامنه‌ی اختصاصی (مثلاً brand.com)' : 'نامِ دلخواه برای ساب‌دامین';
+    });
+  });
+  $('#publishBtn').addEventListener('click', function () {
+    var name = slug($('#hostName').value || cfg.brand);
+    var url = hostMode === 'custom'
+      ? 'https://' + ($('#hostName').value || (name + '.com'))
+      : 'https://' + name + '.cinemate.site';
+    $('#publishBtn').textContent = '… در حال انتشار';
+    setTimeout(function () {
+      $('#publishUrl').textContent = url;
+      $('#publishBox').classList.add('show');
+      $('#publishBtn').textContent = '🚀 انتشار روی هاست ما';
+      toast('منتشر شد 🎉');
+    }, 1100);
+  });
+  $('#copyUrl').addEventListener('click', function () {
+    var u = $('#publishUrl').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(function () { toast('لینک کپی شد'); });
+  });
+
+  /* ----- esc closes overlays ----- */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeAuth(); }
+  });
+})();

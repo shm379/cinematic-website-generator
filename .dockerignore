@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.vercel
+.vercelignore
+.DS_Store
+Dockerfile
+docker-compose.yml
+# Large source assets not needed at runtime (the demo uses public/frames/)
+resourcess-assets
+*.md
