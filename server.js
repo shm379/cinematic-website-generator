@@ -78,11 +78,27 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/builder', (req, res) => res.sendFile(path.join(__dirname, 'public', 'builder.html')));
 
-/* Prefer port 3000; if busy, fall back to the next free port. The success
-   line is logged on setImmediate and gated on server.listening so a trailing
-   EADDRINUSE always wins over a spurious 'listening' event. */
+/* Bind to the platform-provided PORT/HOST so reverse proxies (Coolify,
+   Docker, Heroku, Railway, …) can reach the container.
+   - HOST defaults to 0.0.0.0 so the container is reachable from outside,
+     never just 127.0.0.1.
+   - When PORT is set by the platform we bind EXACTLY to it (no fallback) —
+     incrementing to a free port would make the proxy route to a port the
+     app no longer listens on, so traffic silently never arrives.
+   - Only in local dev (no PORT) do we fall back to the next free port. */
+var HOST = process.env.HOST || '0.0.0.0';
+var ENV_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+
+function banner(port) {
+  console.log('Cinemate running on ' + HOST + ':' + port);
+  console.log('  Home:    http://localhost:' + port + '/');
+  console.log('  Builder: http://localhost:' + port + '/builder');
+  console.log('  Demo:    http://localhost:' + port + '/demo');
+  console.log('  Health:  http://localhost:' + port + '/healthz');
+}
+
 function tryListen(port, triesLeft) {
-  var server = app.listen(port);
+  var server = app.listen(port, HOST);
   var failed = false;
   server.on('error', function (err) {
     failed = true;
@@ -95,16 +111,15 @@ function tryListen(port, triesLeft) {
     }
   });
   server.on('listening', function () {
-    setImmediate(function () {
-      if (!failed && server.listening) {
-        console.log('Cinemate running at http://localhost:' + port);
-        console.log('  Home:    http://localhost:' + port + '/');
-        console.log('  Builder: http://localhost:' + port + '/builder');
-        console.log('  Demo:    http://localhost:' + port + '/demo');
-      }
-    });
+    setImmediate(function () { if (!failed && server.listening) banner(port); });
   });
 }
 
 checkAssets();
-tryListen(3000, 8);
+if (ENV_PORT) {
+  /* Platform-provided port: bind exactly, fail loudly if it is taken. */
+  tryListen(ENV_PORT, 0);
+} else {
+  /* Local dev: prefer 3000, fall back to the next free port. */
+  tryListen(3000, 8);
+}
