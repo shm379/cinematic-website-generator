@@ -1,19 +1,34 @@
-# Cinemate — Docker Compose (also Coolify-compatible)
+# Cinemate — Docker Compose (Coolify-aware)
 #
-# Local:   docker compose up -d   → http://localhost:3000
-# Coolify: create a resource from this repo, pick "Docker Compose" (or
-#          "Dockerfile"), set the port to 3000, and deploy. Coolify handles
-#          the domain, SSL and reverse proxy for you.
+# Local:
+#   docker compose up -d            → http://localhost:3000
+#
+# Coolify:
+#   New Resource → this Git repo → Build Pack: "Docker Compose".
+#   The magic env var SERVICE_FQDN_WEB_3000 below tells Coolify to generate a
+#   domain and route its proxy (Traefik/Caddy) to port 3000 of the `web`
+#   service — this is what makes traffic actually reach the container.
+#   To use your own domain, set SERVICE_FQDN_WEB_3000=https://your-domain.com
+#   in Coolify's environment variables (or leave it empty to auto-generate).
 
 services:
   web:
     build: .
     image: cinemate
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       - NODE_ENV=production
+      # Coolify reads PORT; the app binds exactly to it (see server.js).
+      - PORT=3000
+      # Coolify magic var → generates an FQDN and proxies it to web:3000.
+      - SERVICE_FQDN_WEB_3000
+    # Coolify routes via its proxy to this exposed container port.
+    expose:
+      - "3000"
+    # Published for local `docker compose up`. Coolify ignores host publishing
+    # and uses its proxy + the exposed port above.
+    ports:
+      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
       interval: 30s
