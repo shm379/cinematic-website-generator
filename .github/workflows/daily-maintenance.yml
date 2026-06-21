@@ -1,0 +1,116 @@
+name: Daily Bug Scan & Auto-Fix
+
+# بررسی روزانه‌ی باگ‌ها + رفع issueهای برچسب‌خورده + ساخت Pull Request خودکار.
+# Daily automated bug review, issue fixing, and pull-request creation.
+
+on:
+  schedule:
+    # هر روز ساعت 03:00 UTC (≈ 06:30 به‌وقت تهران).
+    - cron: '0 3 * * *'
+  # امکان اجرای دستی از تب Actions → Run workflow.
+  workflow_dispatch:
+
+# جلوگیری از اجرای هم‌زمانِ چند نمونه.
+concurrency:
+  group: daily-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # برای ساخت برنچ و کامیت
+      pull-requests: write    # برای ساخت Pull Request
+      issues: write           # برای کامنت گذاشتن روی issueها
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Configure git identity
+        run: |
+          git config user.name "claude-maintenance-bot"
+          git config user.email "claude-maintenance-bot@users.noreply.github.com"
+
+      - name: Run Claude daily maintenance
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --model claude-opus-4-8
+            --max-turns 60
+            --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
+          prompt: |
+            You are the automated daily maintenance bot for the
+            "cinematic-website-generator" (Cinemate) project — a Node.js + Express
+            app that generates cinematic, scroll-driven single-file websites.
+
+            Key files:
+              - `server.js`            → Express server, /api/* endpoints, /healthz
+              - `public/generator.js`  → the UMD generation engine
+              - `public/app.js`        → landing + onboarding wizard logic
+              - `public/builder.html`  → advanced editor
+              - `public/index.html`    → landing + signup + wizard
+
+            Today's date is available via `date +%F`.
+
+            ## Your job for this scheduled run
+
+            ### Part A — Proactive bug review
+            1. Statically review the code for REAL bugs: runtime errors, logic
+               mistakes, broken or crashing API endpoints, unhandled promise
+               rejections, missing error handling, security problems (e.g. unsafe
+               input handling, path traversal), and clear edge-case crashes.
+               Concentrate on `server.js` and the files under `public/`.
+            2. Validate syntax with `node --check server.js` and
+               `node --check public/generator.js`. Do NOT run `node server.js`
+               (it starts a long-running server) and do NOT start any server.
+            3. If you find one or more real bugs, fix them with MINIMAL, focused
+               edits. Do not refactor for style, do not reformat unrelated code,
+               and do not invent features.
+
+            ### Part B — Triage open issues
+            4. List open issues that are explicitly opted in for auto-fixing:
+               `gh issue list --state open --label auto-fix --json number,title,body`.
+               For each such issue, if it describes a concrete, tractable bug, fix
+               it as part of this run and reference it in the PR
+               (e.g. "Fixes #<number>").
+
+            ### Part C — Open a Pull Request (only if you changed something)
+            5. If you made NO changes in Part A or Part B, print exactly
+               "No bugs found — nothing to do." and STOP. Never open an empty or
+               cosmetic-only PR.
+            6. If you DID make changes:
+               a. Check for an existing open auto-fix PR to avoid duplicates:
+                  `gh pr list --state open --json title,headRefName`.
+               b. Create a branch named `bot/daily-fix-$(date +%Y%m%d)`. If it
+                  already exists, append `-2`, `-3`, … until unused.
+               c. Commit the changes with a clear, descriptive message.
+               d. Push: `git push -u origin <branch>`.
+               e. Open a DRAFT pull request against the default branch with
+                  `gh pr create --draft`. Title: `[daily-bot] رفع باگ خودکار — <date>`.
+                  Body must include, for EACH bug fixed: the file/location, the
+                  root cause, and the fix — and a short Persian + English summary
+                  at the top. Add `Fixes #<n>` lines for any issues from Part B.
+               f. For each issue addressed in Part B, post a brief comment linking
+                  to the PR with `gh issue comment <number>`.
+
+            ## Hard constraints
+            - Only fix genuine bugs. Keep every diff minimal and self-contained.
+            - NEVER modify secrets, `.env`, or anything under `.github/workflows/`.
+            - NEVER commit `node_modules/`, build output, or generated images.
+            - If syntax checks pass and you cannot point to a concrete bug, do
+              nothing (Part C step 5).
