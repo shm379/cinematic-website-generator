@@ -11,15 +11,17 @@
 
 ## ⚙️ راه‌اندازی (یک‌بار)
 
-### ۱) کلید API را به‌عنوان Secret اضافه کنید
+### ۱) توکنِ احراز هویت را به‌عنوان Secret اضافه کنید
 مسیر: **Settings → Secrets and variables → Actions → New repository secret**
 
-- نام: `ANTHROPIC_API_KEY`
-- مقدار: کلید Anthropic شما (`sk-ant-...`)
+این مخزن از **توکنِ اشتراکِ Claude (OAuth)** استفاده می‌کند:
 
-> اگر به‌جای کلید مستقیم از اشتراکِ Claude (OAuth) استفاده می‌کنید، می‌توانید
-> `CLAUDE_CODE_OAUTH_TOKEN` را تنظیم کرده و در هر دو workflow خطِ
-> `anthropic_api_key:` را با `claude_code_oauth_token:` جایگزین کنید.
+- نام: `CLAUDE_CODE_OAUTH_TOKEN`
+- مقدار: توکنِ OAuth شما (با `claude setup-token` ساخته می‌شود)
+
+> اگر به‌جای اشتراک می‌خواهید از **کلید مستقیمِ Anthropic API** استفاده کنید،
+> یک secret به نامِ `ANTHROPIC_API_KEY` بسازید و در هر دو workflow خطِ
+> `claude_code_oauth_token:` را با `anthropic_api_key:` جایگزین کنید.
 
 ### ۲) اجازه‌ی ساخت PR توسط Actions را بدهید
 مسیر: **Settings → Actions → General → Workflow permissions**
@@ -55,4 +57,4 @@
 
 - PRهای روزانه به‌صورت **draft** ساخته می‌شوند تا قبل از merge بازبینی شوند.
 - workflowها هرگز `.env`، secretها یا خودِ فایل‌های `.github/workflows/` را تغییر نمی‌دهند.
-- اگر `ANTHROPIC_API_KEY` تنظیم نشده باشد، اجراها با خطا متوقف می‌شوند (هیچ تغییری روی کد اعمال نمی‌شود).
+- اگر `CLAUDE_CODE_OAUTH_TOKEN` تنظیم نشده باشد، اجراها با خطا متوقف می‌شوند (هیچ تغییری روی کد اعمال نمی‌شود).

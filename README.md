@@ -126,7 +126,7 @@ project/
 * **بررسیِ روزانه‌ی باگ** — هر روز کد را اسکن می‌کند، issueهای با برچسبِ `auto-fix` را رفع می‌کند و یک **Pull Request پیش‌نویس** می‌سازد (اگر باگی نباشد، PRای ساخته نمی‌شود).
 * **`@claude` در issueها/کامنت‌ها** — هرجا `@claude` بنویسید، همان لحظه بررسی/اصلاح کرده و در صورت نیاز PR می‌سازد.
 
-راه‌اندازی فقط یک قدم دارد: Secret به نامِ `ANTHROPIC_API_KEY` را اضافه کنید. جزئیاتِ کامل در [`.github/AUTOMATION.md`](.github/AUTOMATION.md).
+راه‌اندازی فقط یک قدم دارد: Secret به نامِ `CLAUDE_CODE_OAUTH_TOKEN` (توکنِ اشتراکِ Claude) را اضافه کنید. جزئیاتِ کامل در [`.github/AUTOMATION.md`](.github/AUTOMATION.md).
 
 ---
 
