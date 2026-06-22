@@ -457,8 +457,23 @@
       });
     }
 
+    /* ---- static reveal: a correct hero with no animation libraries ----
+       Used when GSAP/ScrollTrigger are unavailable (e.g. a blocked CDN). The
+       page still shows THIS brand/field/theme — the ambient canvas keeps
+       running and the collection + newsletter sit at their natural visible
+       state — instead of being stranded behind the loader. */
+    function staticReveal() {
+      var title = document.querySelector('#ov1 .title-text');
+      if (title) { title.style.opacity = '1'; title.style.transform = 'none'; }
+      var brand = document.getElementById('ovBrand');
+      if (brand) brand.style.opacity = '1';
+    }
+
     /* ---- scroll-driven timeline ---- */
     function buildScroll() {
+      // No animation engine (blocked/slow CDN) → reveal a static hero instead
+      // of throwing, which would otherwise leave the page stuck on the loader.
+      if (!window.gsap || !window.ScrollTrigger) { staticReveal(); return; }
       gsap.registerPlugin(ScrollTrigger);
       ScrollTrigger.config({ ignoreMobileResize: true });
 
@@ -548,7 +563,8 @@
         loaderFill.style.width = '100%';
         sizeCanvas();
         buildScene();
-        buildScroll();
+        // Never let a scroll-setup failure trap the page behind the loader.
+        try { buildScroll(); } catch (e) { staticReveal(); }
         loader.classList.add('hidden');
         setTimeout(function () {
           document.body.classList.remove('loading');
