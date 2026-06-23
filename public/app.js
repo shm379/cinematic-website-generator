@@ -205,7 +205,23 @@
     var lang = cfg ? cfg.lang : 'fa';
     cfg = buildFromPreset(f, keepBrand, lang);
     $$('.field-card', wzFields).forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-field') === f); });
+    markSwitching();
     syncForm(); preview();
+  }
+
+  // Field switches reload the (heavy) preview iframe; until the new field paints,
+  // the browser keeps the previous field on screen. Cover it with a spinner so
+  // the selection and the preview never look out of sync.
+  var switchClearT;
+  function markSwitching() {
+    var dev = $('#wzDevice'); if (!dev) return;
+    dev.classList.add('switching');
+    clearTimeout(switchClearT);
+    switchClearT = setTimeout(function () { dev.classList.remove('switching'); }, 2600);
+  }
+  function clearSwitching() {
+    clearTimeout(switchClearT);
+    var dev = $('#wzDevice'); if (dev) dev.classList.remove('switching');
   }
 
   /* ----- mega prompt: free text → full config ----- */
@@ -368,7 +384,9 @@
   var lastHtml = '';
   function preview() {
     lastHtml = CWG.generate(cfg);
-    $('#wzFrame').srcdoc = lastHtml;
+    var fr = $('#wzFrame');
+    fr.onload = clearSwitching; // drop the spinner the moment the new field paints
+    fr.srcdoc = lastHtml;
     try { localStorage.setItem('cinemate_draft', JSON.stringify(cfg)); } catch (e) {}
     fillReview();
   }
