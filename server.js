@@ -71,9 +71,64 @@ app.get('/api/site', (req, res) => {
 });
 
 // --- API: mega-prompt → site ---------------------------------------------
-// Turns a free-text description into a full config + HTML. Uses Claude when
-// ANTHROPIC_API_KEY is set (and the SDK is installed); otherwise falls back to
-// the keyless heuristic parser in generator.js. Always returns a result.
+// Turns a free-text description into a full config + HTML. Resolution order:
+//   1. NabuGate — the org's OpenAI-compatible AI gateway (when NABU_BASE_URL is
+//      set), so this project never talks to a model provider directly.
+//   2. Claude via the Anthropic SDK (when ANTHROPIC_API_KEY is set).
+//   3. the keyless heuristic parser in generator.js.
+// It always returns a result.
+
+// buildConfigSystemPrompt is the shared instruction that makes the model emit a
+// strict JSON config the generator understands. Kept in one place so every AI
+// path (NabuGate, Anthropic) produces the same shape.
+function buildConfigSystemPrompt() {
+  const fields = Object.keys(CWG.presets).join(', ');
+  return (
+    'You convert a business description into a JSON config for a cinematic website generator. ' +
+    'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
+    'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
+    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
+    'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
+    'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
+    'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.'
+  );
+}
+
+// extractJSON pulls the first {...} object out of a model's text response.
+function extractJSON(text) {
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a === -1 || b === -1) throw new Error('no JSON in model response');
+  return JSON.parse(text.slice(a, b + 1));
+}
+
+// configFromPromptNabu routes the mega-prompt through NabuGate's OpenAI-wire
+// /v1/chat/completions. Returns null (skip) when NABU_BASE_URL is not set.
+async function configFromPromptNabu(prompt) {
+  const base = process.env.NABU_BASE_URL;
+  if (!base) return null;
+  if (typeof fetch !== 'function') return null; // Node 18+ (global fetch) required
+  const r = await fetch(base.replace(/\/+$/, '') + '/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '')
+    },
+    body: JSON.stringify({
+      model: process.env.NABU_MODEL || 'nabu-smart',
+      temperature: 0.7,
+      max_tokens: 2000,
+      messages: [
+        { role: 'system', content: buildConfigSystemPrompt() },
+        { role: 'user', content: String(prompt || '') }
+      ]
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate error ' + r.status));
+  const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  return extractJSON(text);
+}
+
 async function configFromPromptLLM(prompt) {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   let Mod;
@@ -81,38 +136,39 @@ async function configFromPromptLLM(prompt) {
   const Anthropic = Mod && Mod.default ? Mod.default : Mod;
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
   const model = process.env.CLAUDE_MODEL || 'claude-opus-4-8';
-  const fields = Object.keys(CWG.presets).join(', ');
-  const system =
-    'You convert a business description into a JSON config for a cinematic website generator. ' +
-    'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
-    'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
-    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
-    'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
-    'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
-    'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.';
   const msg = await client.messages.create({
     model: model,
     max_tokens: 2000,
-    system: system,
+    system: buildConfigSystemPrompt(),
     messages: [{ role: 'user', content: String(prompt || '') }]
   });
   const text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-  const a = text.indexOf('{'), b = text.lastIndexOf('}');
-  if (a === -1 || b === -1) throw new Error('no JSON in model response');
-  return JSON.parse(text.slice(a, b + 1));
+  return extractJSON(text);
 }
 
 app.post('/api/generate-from-prompt', async (req, res) => {
   const prompt = (req.body && req.body.prompt) || '';
   if (!String(prompt).trim()) return res.status(400).json({ error: 'prompt is required' });
   let config = null, via = 'heuristic';
+  // 1) NabuGate (central gateway) — preferred when configured.
   try {
-    config = await configFromPromptLLM(prompt);
-    if (config) via = 'llm';
+    config = await configFromPromptNabu(prompt);
+    if (config) via = 'nabugate';
   } catch (err) {
-    console.warn('LLM prompt parse failed, falling back to heuristic:', err && err.message);
+    console.warn('NabuGate prompt parse failed, trying next:', err && err.message);
     config = null;
   }
+  // 2) Anthropic SDK directly.
+  if (!config) {
+    try {
+      config = await configFromPromptLLM(prompt);
+      if (config) via = 'llm';
+    } catch (err) {
+      console.warn('LLM prompt parse failed, falling back to heuristic:', err && err.message);
+      config = null;
+    }
+  }
+  // 3) keyless heuristic — always works.
   if (!config) config = CWG.parsePrompt(prompt);
   try {
     const full = CWG.withDefaults(config);
