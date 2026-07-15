@@ -306,7 +306,7 @@
     wzCards.appendChild(d);
   }
 
-  /* ----- AI image generation (needs server + OPENAI_API_KEY) ----- */
+  /* ----- card images (Pexels stock photos, or OpenAI if configured) ----- */
   var imgStyle = 'cinematic';
   $$('#wzImgStyle button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -323,7 +323,7 @@
     var status = btn.parentElement.querySelector('.c-imgstatus');
     var it = cfg.items[i] || {};
     var label = CWG.presetFor(cfg.field).label;
-    btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال ساخت';
+    btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال گرفتن عکس';
     status.textContent = '';
     fetch('/api/image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -335,8 +335,10 @@
       .then(function (o) {
         btn.disabled = false; btn.textContent = old;
         if (!o.ok) { status.textContent = o.d && o.d.error ? o.d.error : 'خطا'; return; }
-        cfg.items[i].image = location.origin + o.d.url;
-        status.textContent = '✓ ساخته شد';
+        var u = (o.d && o.d.url) || '';
+        // Pexels returns an absolute URL; the OpenAI path returns a same-origin path.
+        cfg.items[i].image = /^https?:\/\//i.test(u) ? u : (location.origin + u);
+        status.textContent = o.d && o.d.source === 'pexels' ? '✓ از Pexels' : '✓ ساخته شد';
         preview();
       }).catch(function () {
         btn.disabled = false; btn.textContent = old;
