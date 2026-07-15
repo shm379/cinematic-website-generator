@@ -122,7 +122,69 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   }
 });
 
-// --- API: generate an image (OpenAI gpt-image) ---------------------------
+// --- Images: Pexels stock photos (primary) or OpenAI generation (fallback) --
+//
+// POST /api/image  body: { field, style, brand, accent, prompt, size, query? }
+//   → { url, source, ... }
+//
+// Preference order:
+//   1. PEXELS_API_KEY set → search Pexels and return a curated stock photo
+//      (fast, free, no generation cost). This is the default image source.
+//   2. else OPENAI_API_KEY set → generate an image with gpt-image.
+//   3. else → a friendly "configure a key" error.
+
+// English query terms per field — Pexels indexes English best, and the card
+// copy is often Persian, so we drive the search from the field of work.
+const PEXELS_FIELD_QUERY = {
+  tea: 'herbal tea cup',
+  coffee: 'coffee cup cafe',
+  perfume: 'perfume bottle',
+  jewelry: 'gold jewelry luxury',
+  realestate: 'modern architecture building interior',
+  restaurant: 'gourmet food plate restaurant',
+  fitness: 'gym fitness workout',
+  clinic: 'medical health clinic',
+  tech: 'technology abstract',
+  fashion: 'fashion model style',
+  _default: 'elegant business'
+};
+const PEXELS_STYLE_HINT = { cinematic: 'dark moody', product: 'studio', artistic: 'abstract' };
+
+function buildPexelsQuery(o) {
+  o = o || {};
+  if (o.query && String(o.query).trim()) return String(o.query).trim();
+  const base = PEXELS_FIELD_QUERY[o.field] || PEXELS_FIELD_QUERY._default;
+  // borrow any latin words from the (possibly localized) prompt to sharpen it
+  const latin = String(o.prompt || '').match(/[A-Za-z][A-Za-z-]{2,}/g) || [];
+  const extra = latin.slice(0, 2).join(' ');
+  const hint = PEXELS_STYLE_HINT[o.style] || '';
+  return [base, extra, hint].filter(Boolean).join(' ');
+}
+
+async function pexelsImage(o) {
+  const key = process.env.PEXELS_API_KEY;
+  const query = buildPexelsQuery(o);
+  const perPage = 15;
+  const url = 'https://api.pexels.com/v1/search?query=' + encodeURIComponent(query) +
+    '&orientation=landscape&size=large&per_page=' + perPage;
+  const r = await fetch(url, { headers: { Authorization: key } });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  const photos = (data && data.photos) || [];
+  if (!photos.length) throw new Error('No Pexels photos for "' + query + '"');
+  // pick a random result so repeated clicks give variety
+  const pick = photos[Math.floor(Math.random() * photos.length)];
+  const src = pick.src || {};
+  return {
+    url: src.landscape || src.large || src.original,
+    source: 'pexels',
+    query: query,
+    photographer: pick.photographer,
+    photographer_url: pick.photographer_url,
+    pexels_url: pick.url
+  };
+}
+
 const IMAGE_STYLES = {
   cinematic: 'cinematic, dramatic moody lighting, shallow depth of field, atmospheric, premium film still',
   product: 'clean product photography, soft studio lighting, minimal uncluttered background, centred, crisp detail, e-commerce hero',
@@ -143,34 +205,54 @@ function buildImagePrompt(o) {
   return parts.filter(Boolean).join(' ');
 }
 
-app.post('/api/image', async (req, res) => {
+async function openaiImage(o) {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) return res.status(400).json({ error: 'OPENAI_API_KEY is not set on the server. Add it to enable AI image generation.' });
-  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for image generation.' });
+  const prompt = buildImagePrompt(o);
+  const r = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+      prompt: prompt,
+      n: 1,
+      size: o.size || '1536x1024'
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'image API error');
+  const b64 = data.data && data.data[0] && data.data[0].b64_json;
+  if (!b64) throw new Error('no image returned');
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const dir = path.join(__dirname, 'public', 'generated');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, id + '.png'), Buffer.from(b64, 'base64'));
+  return { url: '/generated/' + id + '.png', source: 'openai', prompt: prompt };
+}
+
+app.post('/api/image', async (req, res) => {
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
+  const body = req.body || {};
+  const hasPexels = !!process.env.PEXELS_API_KEY;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+
+  if (!hasPexels && !hasOpenAI) {
+    return res.status(400).json({ error: 'No image source configured. Set PEXELS_API_KEY (stock photos) or OPENAI_API_KEY (AI) on the server.' });
+  }
+
+  // Prefer Pexels stock photos when configured; fall back to OpenAI on failure.
+  if (hasPexels) {
+    try {
+      return res.json(await pexelsImage(body));
+    } catch (err) {
+      if (!hasOpenAI) return res.status(502).json({ error: String(err && err.message ? err.message : err) });
+      console.warn('Pexels image failed, falling back to OpenAI:', err && err.message);
+    }
+  }
+
   try {
-    const body = req.body || {};
-    const prompt = buildImagePrompt(body);
-    const r = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
-        prompt: prompt,
-        n: 1,
-        size: body.size || '1536x1024'
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) return res.status(502).json({ error: (data.error && data.error.message) || 'image API error' });
-    const b64 = data.data && data.data[0] && data.data[0].b64_json;
-    if (!b64) return res.status(502).json({ error: 'no image returned' });
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const dir = path.join(__dirname, 'public', 'generated');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, id + '.png'), Buffer.from(b64, 'base64'));
-    res.json({ url: '/generated/' + id + '.png', prompt: prompt });
+    return res.json(await openaiImage(body));
   } catch (err) {
-    res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    res.status(502).json({ error: String(err && err.message ? err.message : err) });
   }
 });
 
