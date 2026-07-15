@@ -312,6 +312,85 @@ app.post('/api/image', async (req, res) => {
   }
 });
 
+// --- API: image gallery search (Pexels) ----------------------------------
+// GET /api/gallery?query=coffee&page=1&per_page=24&orientation=landscape
+//   → { query, page, per_page, total_results, next_page, photos: [...] }
+// With no query it returns Pexels' "curated" feed, so the gallery has something
+// to show on first load. Requires PEXELS_API_KEY; without it, a friendly error.
+
+// normalizePexelsPhoto keeps only the fields the gallery UI needs (and the
+// attribution Pexels asks us to display).
+function normalizePexelsPhoto(p) {
+  const src = p.src || {};
+  return {
+    id: p.id,
+    width: p.width,
+    height: p.height,
+    alt: p.alt || '',
+    avg_color: p.avg_color || '#15151f',
+    src: {
+      tiny: src.tiny,
+      medium: src.medium,
+      large: src.large,
+      large2x: src.large2x,
+      original: src.original
+    },
+    photographer: p.photographer,
+    photographer_url: p.photographer_url,
+    pexels_url: p.url
+  };
+}
+
+// clampInt parses n and bounds it to [min, max], falling back to def.
+function clampInt(n, def, min, max) {
+  const v = parseInt(n, 10);
+  if (!Number.isFinite(v)) return def;
+  return Math.min(max, Math.max(min, v));
+}
+
+async function pexelsSearch(opts) {
+  const key = process.env.PEXELS_API_KEY;
+  const query = String(opts.query || '').trim();
+  const page = clampInt(opts.page, 1, 1, 1000);
+  const perPage = clampInt(opts.per_page, 24, 1, 80); // Pexels caps per_page at 80
+  const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+  let endpoint;
+  if (query) {
+    endpoint = 'search';
+    params.set('query', query);
+    const orientation = String(opts.orientation || '').trim();
+    if (['landscape', 'portrait', 'square'].includes(orientation)) params.set('orientation', orientation);
+  } else {
+    endpoint = 'curated'; // no query → a nice default feed
+  }
+  const url = 'https://api.pexels.com/v1/' + endpoint + '?' + params.toString();
+  const r = await fetch(url, { headers: { Authorization: key } });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  const photos = ((data && data.photos) || []).map(normalizePexelsPhoto);
+  return {
+    query: query,
+    page: page,
+    per_page: perPage,
+    total_results: (data && data.total_results) || photos.length,
+    next_page: !!(data && data.next_page),
+    photos: photos
+  };
+}
+
+app.get('/api/gallery', async (req, res) => {
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for the gallery.' });
+  if (!process.env.PEXELS_API_KEY) {
+    return res.status(400).json({ error: 'PEXELS_API_KEY is not set on the server. Add it to enable image search (get a free key at https://www.pexels.com/api/).' });
+  }
+  try {
+    const out = await pexelsSearch(req.query || {});
+    res.json(out);
+  } catch (err) {
+    res.status(502).json({ error: String(err && err.message ? err.message : err) });
+  }
+});
+
 // --- Health check (for Docker / Coolify) ---------------------------------
 app.get('/healthz', (req, res) => res.json({ ok: true, service: 'cinemate' }));
 
@@ -319,6 +398,7 @@ app.get('/healthz', (req, res) => res.json({ ok: true, service: 'cinemate' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/builder', (req, res) => res.sendFile(path.join(__dirname, 'public', 'builder.html')));
+app.get('/gallery', (req, res) => res.sendFile(path.join(__dirname, 'public', 'gallery.html')));
 
 /* Bind to the platform-provided PORT/HOST so reverse proxies (Coolify,
    Docker, Heroku, Railway, …) can reach the container.
@@ -335,6 +415,7 @@ function banner(port) {
   console.log('Cinemate running on ' + HOST + ':' + port);
   console.log('  Home:    http://localhost:' + port + '/');
   console.log('  Builder: http://localhost:' + port + '/builder');
+  console.log('  Gallery: http://localhost:' + port + '/gallery');
   console.log('  Demo:    http://localhost:' + port + '/demo');
   console.log('  Health:  http://localhost:' + port + '/healthz');
 }
