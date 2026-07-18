@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>گالری تصاویر — Cinemate</title>
+<meta name="description" content="جست‌وجوی تصاویر استوک از Pexels؛ عکس‌های سینمایی و باکیفیت برای پروژه‌هایت پیدا کن." />
+<meta name="theme-color" content="#06060a" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f59e0b'/%3E%3Cstop offset='0.5' stop-color='%23f43f6e'/%3E%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='%2306060a'/%3E%3Ccircle cx='16' cy='16' r='8' fill='url(%23g)'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://images.pexels.com" crossorigin />
+<link rel="stylesheet" href="/fonts/vazirmatn.css" />
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#06060a; --bg2:#0a0a11; --panel:#101019; --panel2:#15151f; --line:#23232f; --line2:#2e2e3d;
+    --text:#f4f4f7; --muted:#a2a2b2; --faint:#6b6b7c;
+    --amber:#f59e0b; --rose:#f43f6e; --violet:#8b5cf6;
+    --grad:linear-gradient(135deg,#f59e0b 0%,#f43f6e 52%,#8b5cf6 100%);
+    --grad-soft:linear-gradient(135deg,rgba(245,158,11,.16),rgba(244,63,110,.14),rgba(139,92,246,.16));
+    --ease:cubic-bezier(0.16,1,0.3,1); --r:18px;
+  }
+  html{scroll-behavior:smooth}
+  html,body{background:var(--bg)}
+  body{font-family:'Vazirmatn',sans-serif;color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  img{max-width:100%;display:block}
+  ::selection{background:rgba(244,63,110,.3)}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+  .gradient-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;font-size:14px;font-weight:600;
+    border-radius:12px;padding:12px 20px;cursor:pointer;border:1px solid var(--line2);background:var(--panel2);
+    color:var(--text);transition:all .22s var(--ease);white-space:nowrap}
+  .btn:hover{border-color:var(--faint);transform:translateY(-1px)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .btn-grad{background:var(--grad);border:none;color:#0b0710;font-weight:700;box-shadow:0 8px 30px -8px rgba(244,63,110,.5)}
+  .btn-grad:hover{filter:brightness(1.07)}
+  .btn-sm{padding:9px 14px;font-size:13px;border-radius:10px}
+
+  /* nav */
+  nav.bar{position:sticky;top:0;z-index:60;background:rgba(6,6,10,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .bar-in{display:flex;align-items:center;justify-content:space-between;gap:18px;height:66px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
+  .logo .mark{width:26px;height:26px;border-radius:8px;background:var(--grad);box-shadow:0 0 20px -4px var(--rose)}
+  .nav-links{display:flex;gap:26px}
+  .nav-links a{font-size:14px;color:var(--muted);transition:color .2s}
+  .nav-links a:hover,.nav-links a.active{color:var(--text)}
+  @media (max-width:720px){.nav-links{display:none}}
+
+  /* header + search */
+  header.head{position:relative;padding:56px 0 30px;overflow:hidden}
+  header.head::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(ellipse 60% 50% at 50% -10%,rgba(139,92,246,.18),transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 10%,rgba(244,63,110,.14),transparent 60%),
+    radial-gradient(ellipse 50% 40% at 12% 20%,rgba(245,158,11,.12),transparent 60%);pointer-events:none}
+  .head-in{position:relative}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);
+    border:1px solid var(--line2);background:var(--panel);padding:6px 14px;border-radius:999px;margin-bottom:18px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber)}
+  h1{font-size:clamp(28px,5vw,46px);font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-bottom:12px}
+  .sub{color:var(--muted);font-size:16px;max-width:560px}
+
+  form.search{margin-top:28px;display:flex;gap:10px;max-width:680px}
+  .search-field{position:relative;flex:1}
+  .search-field svg{position:absolute;inset-inline-start:16px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:var(--faint);pointer-events:none}
+  .search input{width:100%;font-family:inherit;font-size:16px;color:var(--text);background:var(--panel);
+    border:1px solid var(--line2);border-radius:14px;padding:16px 48px;transition:border-color .2s,box-shadow .2s}
+  .search input::placeholder{color:var(--faint)}
+  .search input:focus{outline:none;border-color:var(--rose);box-shadow:0 0 0 4px rgba(244,63,110,.14)}
+  @media (max-width:560px){form.search{flex-direction:column}.search input{padding:14px 44px}}
+
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
+  .chip{font-size:13px;color:var(--muted);border:1px solid var(--line2);background:var(--panel);
+    padding:7px 14px;border-radius:999px;cursor:pointer;transition:all .2s var(--ease)}
+  .chip:hover{color:var(--text);border-color:var(--faint);transform:translateY(-1px)}
+
+  /* results */
+  main{padding:26px 0 70px}
+  .status{color:var(--muted);font-size:14px;margin-bottom:18px;min-height:20px}
+  .status b{color:var(--text);font-weight:600}
+
+  .grid{columns:4 260px;column-gap:16px}
+  @media (max-width:640px){.grid{column-gap:12px}}
+  .card{break-inside:avoid;margin-bottom:16px;border-radius:14px;overflow:hidden;position:relative;
+    background:var(--panel2);border:1px solid var(--line);opacity:0;transform:translateY(10px);
+    animation:rise .5s var(--ease) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .card img{width:100%;height:auto;background:var(--panel2)}
+  .card .ph{width:100%}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;
+    padding:12px;background:linear-gradient(to top,rgba(4,4,8,.86),rgba(4,4,8,.15) 45%,transparent 70%);
+    opacity:0;transition:opacity .25s var(--ease)}
+  .card:hover .overlay,.card:focus-within .overlay{opacity:1}
+  .credit{font-size:12.5px;color:#e7e7ee;margin-bottom:10px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+  .credit a{color:#fff;font-weight:600;border-bottom:1px solid rgba(255,255,255,.35)}
+  .actions{display:flex;gap:7px;flex-wrap:wrap}
+  .act{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#0b0710;
+    background:rgba(255,255,255,.94);border:none;border-radius:9px;padding:7px 11px;cursor:pointer;transition:transform .15s var(--ease),background .2s}
+  .act:hover{transform:translateY(-1px)}
+  .act.ghost{background:rgba(255,255,255,.12);color:#fff;backdrop-filter:blur(4px)}
+  .act svg{width:14px;height:14px}
+
+  /* states */
+  .center{text-align:center;padding:60px 20px;color:var(--muted)}
+  .center .big{font-size:22px;color:var(--text);font-weight:700;margin-bottom:8px}
+  .spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--rose);
+    margin:0 auto 16px;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .more-wrap{display:flex;justify-content:center;margin-top:26px}
+  .toast{position:fixed;inset-inline-start:50%;bottom:28px;transform:translateX(50%) translateY(20px);
+    background:var(--panel2);border:1px solid var(--line2);color:var(--text);padding:11px 18px;border-radius:12px;
+    font-size:14px;opacity:0;pointer-events:none;transition:all .3s var(--ease);z-index:80;box-shadow:0 12px 40px -10px rgba(0,0,0,.6)}
+  .toast.show{opacity:1;transform:translateX(50%) translateY(0)}
+
+  footer{border-top:1px solid var(--line);padding:26px 0;color:var(--faint);font-size:13px;text-align:center}
+  footer a{color:var(--muted);border-bottom:1px solid var(--line2)}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<nav class="bar">
+  <div class="wrap bar-in">
+    <a class="logo" href="/"><span class="mark"></span>Cinemate</a>
+    <div class="nav-links">
+      <a href="/">خانه</a>
+      <a href="/builder">ویرایشگر</a>
+      <a href="/gallery" class="active">گالری</a>
+      <a href="/demo">نمونه</a>
+    </div>
+    <a class="btn btn-grad btn-sm" href="/">شروع ساخت</a>
+  </div>
+</nav>
+
+<header class="head">
+  <div class="wrap head-in">
+    <span class="eyebrow"><span class="dot"></span>گالری تصاویر · Pexels</span>
+    <h1>یک <span class="gradient-text">تصویر سینمایی</span> پیدا کن</h1>
+    <p class="sub">جست‌وجو کن و از میان میلیون‌ها عکسِ باکیفیت و رایگانِ Pexels انتخاب کن — برای هیرو، کارت‌ها و پس‌زمینه‌های پروژه‌ات.</p>
+
+    <form class="search" id="searchForm" role="search" autocomplete="off">
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" name="q" type="search" placeholder="مثلاً: coffee، architecture، perfume …" aria-label="جست‌وجوی تصویر" />
+      </div>
+      <button class="btn btn-grad" type="submit">جست‌وجو</button>
+    </form>
+
+    <div class="chips" id="chips" aria-label="پیشنهادها"></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="status" id="status" aria-live="polite"></div>
+    <div class="grid" id="grid"></div>
+    <div id="state"></div>
+    <div class="more-wrap"><button class="btn" id="moreBtn" style="display:none">بارگذاری بیشتر</button></div>
+  </div>
+</main>
+
+<footer>
+  عکس‌ها از <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a> — رایگان برای استفاده، با ذکر منبع.
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var grid = document.getElementById('grid');
+  var stateEl = document.getElementById('state');
+  var statusEl = document.getElementById('status');
+  var moreBtn = document.getElementById('moreBtn');
+  var form = document.getElementById('searchForm');
+  var input = document.getElementById('q');
+  var toastEl = document.getElementById('toast');
+
+  var state = { query: '', page: 0, perPage: 24, loading: false, next: false, total: 0 };
+  var toastTimer;
+
+  // Persian label → English query (Pexels indexes English best).
+  var SUGGESTIONS = [
+    ['قهوه','coffee cafe'], ['چای','herbal tea'], ['عطر','perfume bottle'],
+    ['جواهر','gold jewelry luxury'], ['معماری','modern architecture'], ['غذا','gourmet food'],
+    ['مد','fashion editorial'], ['طبیعت','nature landscape'], ['تکنولوژی','technology abstract'],
+    ['سینمایی','cinematic dark moody']
+  ];
+
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 1800);
+  }
+
+  var chipsEl = document.getElementById('chips');
+  SUGGESTIONS.forEach(function(pair){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = pair[0];
+    b.addEventListener('click', function(){ input.value = pair[1]; runSearch(pair[1]); });
+    chipsEl.appendChild(b);
+  });
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+
+  function showState(html){ stateEl.innerHTML = html; }
+  function clearState(){ stateEl.innerHTML = ''; }
+
+  function ratioPad(p){
+    var w = p.width || 3, h = p.height || 2;
+    return (Math.min(160, Math.max(50, (h / w) * 100))) + '%';
+  }
+
+  function card(p){
+    var el = document.createElement('figure');
+    el.className = 'card';
+    var img = p.src.large || p.src.medium || p.src.original;
+    var thumb = p.src.medium || p.src.tiny || img;
+    el.innerHTML =
+      '<div class="ph" style="padding-bottom:' + ratioPad(p) + ';background:' + esc(p.avg_color) + '"></div>' +
+      '<img loading="lazy" decoding="async" alt="' + esc(p.alt || ('عکس از ' + p.photographer)) + '" ' +
+        'src="' + esc(thumb) + '" style="position:absolute;inset:0;height:100%;object-fit:cover" />' +
+      '<figcaption class="overlay">' +
+        '<div class="credit">عکس از <a href="' + esc(p.photographer_url) + '" target="_blank" rel="noopener">' + esc(p.photographer) + '</a></div>' +
+        '<div class="actions">' +
+          '<button class="act" data-copy="' + esc(img) + '" type="button">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>کپی لینک</button>' +
+          '<a class="act ghost" href="' + esc(p.src.original || img) + '" target="_blank" rel="noopener">دانلود</a>' +
+          '<a class="act ghost" href="' + esc(p.pexels_url) + '" target="_blank" rel="noopener">Pexels</a>' +
+        '</div>' +
+      '</figcaption>';
+    // The absolutely-positioned <img> needs the figure to be the positioning ctx.
+    el.style.position = 'relative';
+    var copyBtn = el.querySelector('[data-copy]');
+    copyBtn.addEventListener('click', function(){
+      var url = copyBtn.getAttribute('data-copy');
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(function(){ toast('لینک کپی شد ✓'); },
+          function(){ toast('کپی نشد'); });
+      } else { toast(url); }
+    });
+    return el;
+  }
+
+  function setStatus(){
+    if (state.total && grid.children.length){
+      var scope = state.query ? ('«' + esc(state.query) + '»') : 'منتخب‌ها';
+      statusEl.innerHTML = 'نمایش <b>' + grid.children.length + '</b> از حدود <b>' + state.total.toLocaleString('fa-IR') + '</b> نتیجه برای ' + scope;
+    } else { statusEl.textContent = ''; }
+  }
+
+  function load(reset){
+    if (state.loading) return;
+    state.loading = true;
+    moreBtn.disabled = true;
+    if (reset){
+      state.page = 0; grid.innerHTML = ''; statusEl.textContent = '';
+      showState('<div class="center"><div class="spinner"></div>در حال جست‌وجو…</div>');
+    } else {
+      moreBtn.textContent = 'در حال بارگذاری…';
+    }
+    var page = state.page + 1;
+    var url = '/api/gallery?page=' + page + '&per_page=' + state.perPage +
+      (state.query ? '&query=' + encodeURIComponent(state.query) : '');
+    fetch(url).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+      .then(function(res){
+        state.loading = false; moreBtn.disabled = false; moreBtn.textContent = 'بارگذاری بیشتر';
+        if (!res.ok){
+          if (reset) showState('<div class="center"><div class="big">امکان جست‌وجو نیست</div>' + esc(res.d && res.d.error || 'خطای ناشناخته') + '</div>');
+          else toast(res.d && res.d.error || 'خطا در بارگذاری');
+          moreBtn.style.display = 'none';
+          return;
+        }
+        var d = res.d;
+        clearState();
+        state.page = d.page; state.next = d.next_page; state.total = d.total_results;
+        if (!d.photos.length && reset){
+          showState('<div class="center"><div class="big">چیزی پیدا نشد</div>عبارت دیگری امتحان کن.</div>');
+          moreBtn.style.display = 'none'; return;
+        }
+        d.photos.forEach(function(p, i){
+          var c = card(p); c.style.animationDelay = Math.min(i * 22, 400) + 'ms'; grid.appendChild(c);
+        });
+        moreBtn.style.display = state.next ? 'inline-flex' : 'none';
+        setStatus();
+      })
+      .catch(function(err){
+        state.loading = false; moreBtn.disabled = false; moreBtn.textContent = 'بارگذاری بیشتر';
+        if (reset) showState('<div class="center"><div class="big">خطای شبکه</div>' + esc(err && err.message || '') + '</div>');
+        else toast('خطای شبکه');
+      });
+  }
+
+  function runSearch(q){
+    state.query = String(q || '').trim();
+    // Reflect the query in the URL so searches are shareable/back-navigable.
+    try { history.replaceState(null, '', state.query ? ('/gallery?q=' + encodeURIComponent(state.query)) : '/gallery'); } catch(_){}
+    load(true);
+  }
+
+  form.addEventListener('submit', function(e){ e.preventDefault(); runSearch(input.value); });
+  moreBtn.addEventListener('click', function(){ load(false); });
+
+  // Deep-link support: /gallery?q=coffee runs that search on load.
+  var initial = new URLSearchParams(location.search).get('q') || '';
+  if (initial){ input.value = initial; }
+  runSearch(initial);
+})();
+</script>
+</body>
+</html>
