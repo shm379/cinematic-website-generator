@@ -71,9 +71,64 @@ app.get('/api/site', (req, res) => {
 });
 
 // --- API: mega-prompt → site ---------------------------------------------
-// Turns a free-text description into a full config + HTML. Uses Claude when
-// ANTHROPIC_API_KEY is set (and the SDK is installed); otherwise falls back to
-// the keyless heuristic parser in generator.js. Always returns a result.
+// Turns a free-text description into a full config + HTML. Resolution order:
+//   1. NabuGate — the org's OpenAI-compatible AI gateway (when NABU_BASE_URL is
+//      set), so this project never talks to a model provider directly.
+//   2. Claude via the Anthropic SDK (when ANTHROPIC_API_KEY is set).
+//   3. the keyless heuristic parser in generator.js.
+// It always returns a result.
+
+// buildConfigSystemPrompt is the shared instruction that makes the model emit a
+// strict JSON config the generator understands. Kept in one place so every AI
+// path (NabuGate, Anthropic) produces the same shape.
+function buildConfigSystemPrompt() {
+  const fields = Object.keys(CWG.presets).join(', ');
+  return (
+    'You convert a business description into a JSON config for a cinematic website generator. ' +
+    'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
+    'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
+    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
+    'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
+    'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
+    'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.'
+  );
+}
+
+// extractJSON pulls the first {...} object out of a model's text response.
+function extractJSON(text) {
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a === -1 || b === -1) throw new Error('no JSON in model response');
+  return JSON.parse(text.slice(a, b + 1));
+}
+
+// configFromPromptNabu routes the mega-prompt through NabuGate's OpenAI-wire
+// /v1/chat/completions. Returns null (skip) when NABU_BASE_URL is not set.
+async function configFromPromptNabu(prompt) {
+  const base = process.env.NABU_BASE_URL;
+  if (!base) return null;
+  if (typeof fetch !== 'function') return null; // Node 18+ (global fetch) required
+  const r = await fetch(base.replace(/\/+$/, '') + '/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '')
+    },
+    body: JSON.stringify({
+      model: process.env.NABU_MODEL || 'nabu-smart',
+      temperature: 0.7,
+      max_tokens: 2000,
+      messages: [
+        { role: 'system', content: buildConfigSystemPrompt() },
+        { role: 'user', content: String(prompt || '') }
+      ]
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate error ' + r.status));
+  const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  return extractJSON(text);
+}
+
 async function configFromPromptLLM(prompt) {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   let Mod;
@@ -81,38 +136,39 @@ async function configFromPromptLLM(prompt) {
   const Anthropic = Mod && Mod.default ? Mod.default : Mod;
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
   const model = process.env.CLAUDE_MODEL || 'claude-opus-4-8';
-  const fields = Object.keys(CWG.presets).join(', ');
-  const system =
-    'You convert a business description into a JSON config for a cinematic website generator. ' +
-    'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
-    'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
-    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
-    'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
-    'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
-    'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.';
   const msg = await client.messages.create({
     model: model,
     max_tokens: 2000,
-    system: system,
+    system: buildConfigSystemPrompt(),
     messages: [{ role: 'user', content: String(prompt || '') }]
   });
   const text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-  const a = text.indexOf('{'), b = text.lastIndexOf('}');
-  if (a === -1 || b === -1) throw new Error('no JSON in model response');
-  return JSON.parse(text.slice(a, b + 1));
+  return extractJSON(text);
 }
 
 app.post('/api/generate-from-prompt', async (req, res) => {
   const prompt = (req.body && req.body.prompt) || '';
   if (!String(prompt).trim()) return res.status(400).json({ error: 'prompt is required' });
   let config = null, via = 'heuristic';
+  // 1) NabuGate (central gateway) — preferred when configured.
   try {
-    config = await configFromPromptLLM(prompt);
-    if (config) via = 'llm';
+    config = await configFromPromptNabu(prompt);
+    if (config) via = 'nabugate';
   } catch (err) {
-    console.warn('LLM prompt parse failed, falling back to heuristic:', err && err.message);
+    console.warn('NabuGate prompt parse failed, trying next:', err && err.message);
     config = null;
   }
+  // 2) Anthropic SDK directly.
+  if (!config) {
+    try {
+      config = await configFromPromptLLM(prompt);
+      if (config) via = 'llm';
+    } catch (err) {
+      console.warn('LLM prompt parse failed, falling back to heuristic:', err && err.message);
+      config = null;
+    }
+  }
+  // 3) keyless heuristic — always works.
   if (!config) config = CWG.parsePrompt(prompt);
   try {
     const full = CWG.withDefaults(config);
@@ -122,7 +178,110 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   }
 });
 
-// --- API: generate an image (OpenAI gpt-image) ---------------------------
+// --- Images: stock photos (primary) or OpenAI generation (fallback) --------
+//
+// POST /api/image  body: { field, style, brand, accent, prompt, size, query? }
+//   → { url, source, ... }
+//
+// Stock photos come from Pexels, preferably THROUGH NabuGate's photo proxy
+// (GET {NABU_BASE_URL}/v1/photos/search) so the Pexels key stays a gateway
+// secret and this project only needs its NabuGate key. Preference order:
+//   1. NABU_BASE_URL set → NabuGate photo proxy (Pexels behind the gateway).
+//   2. else PEXELS_API_KEY set → talk to Pexels directly (legacy/local mode).
+//   3. else OPENAI_API_KEY set → generate an image with gpt-image.
+//   4. else → a friendly "configure a key" error.
+
+// hasStockSource reports whether any stock-photo path is configured.
+function hasStockSource() {
+  return !!(process.env.NABU_BASE_URL || process.env.PEXELS_API_KEY);
+}
+
+// nabuPhotoSearch calls NabuGate's normalized Pexels proxy. Same response
+// shape as Pexels itself (photos[].src sizes, photographer, total_results),
+// so both stock paths below can share the shaping code.
+async function nabuPhotoSearch(params) {
+  const base = process.env.NABU_BASE_URL.replace(/\/+$/, '');
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== '') qs.set(k, String(v));
+  }
+  const r = await fetch(base + '/v1/photos/search?' + qs.toString(), {
+    headers: { Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '') }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate photos error ' + r.status));
+  return data;
+}
+
+// pexelsRequest hits the Pexels API directly (legacy mode, PEXELS_API_KEY).
+async function pexelsRequest(endpoint, params) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== '') qs.set(k, String(v));
+  }
+  const r = await fetch('https://api.pexels.com/v1/' + endpoint + '?' + qs.toString(), {
+    headers: { Authorization: process.env.PEXELS_API_KEY }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  return data;
+}
+
+// stockSearch is the single entry point for stock photos: NabuGate proxy when
+// configured, direct Pexels otherwise. `query: ""` means the curated feed.
+async function stockSearch(params) {
+  if (process.env.NABU_BASE_URL) return nabuPhotoSearch(params);
+  const { query } = params;
+  if (query) return pexelsRequest('search', params);
+  return pexelsRequest('curated', { page: params.page, per_page: params.per_page });
+}
+
+// English query terms per field — Pexels indexes English best, and the card
+// copy is often Persian, so we drive the search from the field of work.
+const PEXELS_FIELD_QUERY = {
+  tea: 'herbal tea cup',
+  coffee: 'coffee cup cafe',
+  perfume: 'perfume bottle',
+  jewelry: 'gold jewelry luxury',
+  realestate: 'modern architecture building interior',
+  restaurant: 'gourmet food plate restaurant',
+  fitness: 'gym fitness workout',
+  clinic: 'medical health clinic',
+  tech: 'technology abstract',
+  fashion: 'fashion model style',
+  _default: 'elegant business'
+};
+const PEXELS_STYLE_HINT = { cinematic: 'dark moody', product: 'studio', artistic: 'abstract' };
+
+function buildPexelsQuery(o) {
+  o = o || {};
+  if (o.query && String(o.query).trim()) return String(o.query).trim();
+  const base = PEXELS_FIELD_QUERY[o.field] || PEXELS_FIELD_QUERY._default;
+  // borrow any latin words from the (possibly localized) prompt to sharpen it
+  const latin = String(o.prompt || '').match(/[A-Za-z][A-Za-z-]{2,}/g) || [];
+  const extra = latin.slice(0, 2).join(' ');
+  const hint = PEXELS_STYLE_HINT[o.style] || '';
+  return [base, extra, hint].filter(Boolean).join(' ');
+}
+
+async function pexelsImage(o) {
+  const query = buildPexelsQuery(o);
+  const data = await stockSearch({ query: query, orientation: 'landscape', size: 'large', per_page: 15 });
+  const photos = (data && data.photos) || [];
+  if (!photos.length) throw new Error('No stock photos for "' + query + '"');
+  // pick a random result so repeated clicks give variety
+  const pick = photos[Math.floor(Math.random() * photos.length)];
+  const src = pick.src || {};
+  return {
+    url: src.landscape || src.large2x || src.large || src.original,
+    source: process.env.NABU_BASE_URL ? 'nabugate-pexels' : 'pexels',
+    query: query,
+    photographer: pick.photographer,
+    photographer_url: pick.photographer_url,
+    pexels_url: pick.url || pick.pexels_url
+  };
+}
+
 const IMAGE_STYLES = {
   cinematic: 'cinematic, dramatic moody lighting, shallow depth of field, atmospheric, premium film still',
   product: 'clean product photography, soft studio lighting, minimal uncluttered background, centred, crisp detail, e-commerce hero',
@@ -143,34 +302,126 @@ function buildImagePrompt(o) {
   return parts.filter(Boolean).join(' ');
 }
 
-app.post('/api/image', async (req, res) => {
+async function openaiImage(o) {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) return res.status(400).json({ error: 'OPENAI_API_KEY is not set on the server. Add it to enable AI image generation.' });
-  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for image generation.' });
+  const prompt = buildImagePrompt(o);
+  const r = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+      prompt: prompt,
+      n: 1,
+      size: o.size || '1536x1024'
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error((data.error && data.error.message) || 'image API error');
+  const b64 = data.data && data.data[0] && data.data[0].b64_json;
+  if (!b64) throw new Error('no image returned');
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const dir = path.join(__dirname, 'public', 'generated');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, id + '.png'), Buffer.from(b64, 'base64'));
+  return { url: '/generated/' + id + '.png', source: 'openai', prompt: prompt };
+}
+
+app.post('/api/image', async (req, res) => {
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
+  const body = req.body || {};
+  const hasStock = hasStockSource();
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+
+  if (!hasStock && !hasOpenAI) {
+    return res.status(400).json({ error: 'No image source configured. Set NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, PEXELS_API_KEY (direct stock photos) or OPENAI_API_KEY (AI) on the server.' });
+  }
+
+  // Prefer stock photos when configured; fall back to OpenAI on failure.
+  if (hasStock) {
+    try {
+      return res.json(await pexelsImage(body));
+    } catch (err) {
+      if (!hasOpenAI) return res.status(502).json({ error: String(err && err.message ? err.message : err) });
+      console.warn('Stock image failed, falling back to OpenAI:', err && err.message);
+    }
+  }
+
   try {
-    const body = req.body || {};
-    const prompt = buildImagePrompt(body);
-    const r = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
-        prompt: prompt,
-        n: 1,
-        size: body.size || '1536x1024'
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) return res.status(502).json({ error: (data.error && data.error.message) || 'image API error' });
-    const b64 = data.data && data.data[0] && data.data[0].b64_json;
-    if (!b64) return res.status(502).json({ error: 'no image returned' });
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const dir = path.join(__dirname, 'public', 'generated');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, id + '.png'), Buffer.from(b64, 'base64'));
-    res.json({ url: '/generated/' + id + '.png', prompt: prompt });
+    return res.json(await openaiImage(body));
   } catch (err) {
-    res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    res.status(502).json({ error: String(err && err.message ? err.message : err) });
+  }
+});
+
+// --- API: image gallery search (Pexels) ----------------------------------
+// GET /api/gallery?query=coffee&page=1&per_page=24&orientation=landscape
+//   → { query, page, per_page, total_results, next_page, photos: [...] }
+// With no query it returns Pexels' "curated" feed, so the gallery has something
+// to show on first load. Requires PEXELS_API_KEY; without it, a friendly error.
+
+// normalizePexelsPhoto keeps only the fields the gallery UI needs (and the
+// attribution Pexels asks us to display).
+function normalizePexelsPhoto(p) {
+  const src = p.src || {};
+  return {
+    id: p.id,
+    width: p.width,
+    height: p.height,
+    alt: p.alt || '',
+    avg_color: p.avg_color || '#15151f',
+    src: {
+      tiny: src.tiny,
+      medium: src.medium,
+      large: src.large,
+      large2x: src.large2x,
+      original: src.original
+    },
+    photographer: p.photographer,
+    photographer_url: p.photographer_url,
+    pexels_url: p.url
+  };
+}
+
+// clampInt parses n and bounds it to [min, max], falling back to def.
+function clampInt(n, def, min, max) {
+  const v = parseInt(n, 10);
+  if (!Number.isFinite(v)) return def;
+  return Math.min(max, Math.max(min, v));
+}
+
+async function pexelsSearch(opts) {
+  const query = String(opts.query || '').trim();
+  const page = clampInt(opts.page, 1, 1, 1000);
+  const perPage = clampInt(opts.per_page, 24, 1, 80); // Pexels caps per_page at 80
+  const orientation = String(opts.orientation || '').trim();
+  const data = await stockSearch({
+    query: query,
+    page: page,
+    per_page: perPage,
+    orientation: ['landscape', 'portrait', 'square'].includes(orientation) ? orientation : ''
+  });
+  const photos = ((data && data.photos) || []).map(normalizePexelsPhoto);
+  const total = (data && data.total_results) || photos.length;
+  return {
+    query: query,
+    page: page,
+    per_page: perPage,
+    total_results: total,
+    next_page: !!(data && data.next_page) || page * perPage < total,
+    photos: photos
+  };
+}
+
+app.get('/api/gallery', async (req, res) => {
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for the gallery.' });
+  if (!hasStockSource()) {
+    return res.status(400).json({ error: 'No stock-photo source configured. Set NABU_BASE_URL (+NABU_API_KEY) to use the gateway photo proxy, or PEXELS_API_KEY for direct access (free key at https://www.pexels.com/api/).' });
+  }
+  try {
+    const out = await pexelsSearch(req.query || {});
+    res.json(out);
+  } catch (err) {
+    res.status(502).json({ error: String(err && err.message ? err.message : err) });
   }
 });
 
@@ -181,6 +432,7 @@ app.get('/healthz', (req, res) => res.json({ ok: true, service: 'cinemate' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/builder', (req, res) => res.sendFile(path.join(__dirname, 'public', 'builder.html')));
+app.get('/gallery', (req, res) => res.sendFile(path.join(__dirname, 'public', 'gallery.html')));
 
 /* Bind to the platform-provided PORT/HOST so reverse proxies (Coolify,
    Docker, Heroku, Railway, …) can reach the container.
@@ -197,6 +449,7 @@ function banner(port) {
   console.log('Cinemate running on ' + HOST + ':' + port);
   console.log('  Home:    http://localhost:' + port + '/');
   console.log('  Builder: http://localhost:' + port + '/builder');
+  console.log('  Gallery: http://localhost:' + port + '/gallery');
   console.log('  Demo:    http://localhost:' + port + '/demo');
   console.log('  Health:  http://localhost:' + port + '/healthz');
 }

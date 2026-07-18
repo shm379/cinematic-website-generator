@@ -29,12 +29,14 @@ node server.js
 |------|-------|
 | `/` | **لندینگ + ثبت‌نام + ویزاردِ onboarding** |
 | `/builder` | ویرایشگرِ پیشرفته |
+| `/gallery` | **گالریِ تصاویر** — جست‌وجوی عکسِ استوک از Pexels |
 | `/demo` | نمونه‌ی واقعی و پولیش‌شده («خشخاش») |
 | `/healthz` | health check (برای Docker/Coolify) |
 | `POST /api/generate` | تولیدِ سمت‌سرور؛ بدنه = config → `{ html }` |
 | `GET /api/site?field=coffee&brand=Cafe` | رندرِ مستقیمِ یک سایتِ تولیدشده |
 | `POST /api/generate-from-prompt` | **مگاپرامپت**: `{ prompt }` → `{ via, config, html }` |
-| `POST /api/image` | **ساخت عکس** با AI: `{ field, style, brand, accent, prompt }` → `{ url }` |
+| `POST /api/image` | **ساخت عکس**: عکسِ استوکِ Pexels یا تولید با AI → `{ url, source }` |
+| `GET /api/gallery?query=coffee&page=1` | **جست‌وجوی گالری** در Pexels → `{ photos, next_page, total_results }` |
 
 > همه‌ی منطقِ ساختِ سایت **کلاینت‌ساید** است؛ پس روی هاستِ استاتیک (Vercel) هم کار می‌کند. اندپوینت‌های `/api/*` (و قابلیت‌های AI) نیازمندِ سرور هستند.
 
@@ -42,15 +44,24 @@ node server.js
 
 ## 🤖 قابلیت‌های هوش مصنوعی (اختیاری)
 
-* **مگاپرامپت → سایت** (`POST /api/generate-from-prompt`): یک توصیفِ متنیِ آزاد بده، یک کانفیگِ کامل + HTML بگیر. اگر `ANTHROPIC_API_KEY` تنظیم شده باشد با **Claude** (`claude-opus-4-8`) تحلیل می‌شود؛ در غیر این‌صورت یک **پارسرِ بدونِ کلید** (حوزه/برند/رنگ از متن) به‌کار می‌رود — پس همیشه کار می‌کند. در ویزارد، جعبه‌ی «✨ بساز با پرامپت» در قدم ۱.
+* **مگاپرامپت → سایت** (`POST /api/generate-from-prompt`): یک توصیفِ متنیِ آزاد بده، یک کانفیگِ کامل + HTML بگیر. ترتیبِ انتخاب: اگر `NABU_BASE_URL` تنظیم شده باشد از **NabuGate** (دروازهٔ مرکزیِ هوش مصنوعی، سازگار با OpenAI) استفاده می‌شود تا پروژه مستقیم به هیچ providerی وصل نشود؛ وگرنه اگر `ANTHROPIC_API_KEY` باشد با **Claude** تحلیل می‌شود؛ در غیر این‌صورت یک **پارسرِ بدونِ کلید** به‌کار می‌رود — پس همیشه کار می‌کند. در ویزارد، جعبه‌ی «✨ بساز با پرامپت» در قدم ۱.
 * **ساخت عکس** (`POST /api/image`): با `OPENAI_API_KEY` و مدلِ `gpt-image-1`، عکسِ اختصاصیِ کارت‌ها در سه سبک (سینمایی/محصولی/هنری) ساخته می‌شود. عکس‌ها در `public/generated/` ذخیره می‌شوند. بدونِ کلید، دکمه‌ها یک پیامِ راهنما می‌دهند.
+* **گالریِ تصاویر** (صفحهٔ `/gallery` + `GET /api/gallery`): یک صفحهٔ جداگانه برای **جست‌وجوی عکسِ استوک از Pexels** — با گریدِ ماسونری، صفحه‌بندی («بارگذاری بیشتر»)، و ذکرِ منبع/عکاس (طبقِ شرایطِ Pexels). عکس‌ها ترجیحاً از **پروکسیِ عکسِ NabuGate** می‌آیند (`{NABU_BASE_URL}/v1/photos/search` — کلیدِ Pexels فقط داخلِ دروازه می‌ماند)؛ بدونِ NabuGate، با `PEXELS_API_KEY` مستقیم به Pexels وصل می‌شود. بدونِ هیچ‌کدام، صفحه یک پیامِ راهنما نشان می‌دهد. بدونِ کوئری، فیدِ «منتخب»ِ Pexels نمایش داده می‌شود.
+
+> 🎬 **تیمِ ساخت (ساب‌ایجنت‌ها):** هفت متخصصِ این سبک (کارگردانِ خلاق، طراحِ تعاملی،
+> موشن، سه‌بعدی، فرانت‌اند، محتوا، کارایی/دسترس‌پذیری) به‌صورتِ ساب‌ایجنت‌های NabuGate
+> تعریف شده‌اند و با یک درخواست اجرا می‌شوند. جزئیات در [`AGENTS.md`](AGENTS.md).
 
 متغیرهای محیطی (همه اختیاری) — به `.env.example` نگاه کن:
 
 ```bash
-OPENAI_API_KEY=sk-...           # برای ساخت عکس
+NABU_BASE_URL=https://nabugate.internal  # مسیرِ دروازه (بدونِ /v1)؛ مسیرِ ترجیحیِ AI
+NABU_API_KEY=nabu_...                     # کلیدِ پروژه در NabuGate
+NABU_MODEL=nabu-smart                     # هر alias یا ایجنتِ NabuGate (مثلِ cine-content-strategist)
+PEXELS_API_KEY=...              # حالتِ مستقیم/لوکال؛ با NABU_BASE_URL لازم نیست (کلید در خودِ دروازه است)
+OPENAI_API_KEY=sk-...           # ساخت عکس با AI (فالبک)
 OPENAI_IMAGE_MODEL=gpt-image-1  # پیش‌فرض
-ANTHROPIC_API_KEY=sk-ant-...    # برای مگاپرامپتِ هوشمند
+ANTHROPIC_API_KEY=sk-ant-...    # مگاپرامپت وقتی NabuGate تنظیم نشده
 CLAUDE_MODEL=claude-opus-4-8    # پیش‌فرض
 ```
 
