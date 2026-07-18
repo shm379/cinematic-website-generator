@@ -178,16 +178,63 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   }
 });
 
-// --- Images: Pexels stock photos (primary) or OpenAI generation (fallback) --
+// --- Images: stock photos (primary) or OpenAI generation (fallback) --------
 //
 // POST /api/image  body: { field, style, brand, accent, prompt, size, query? }
 //   → { url, source, ... }
 //
-// Preference order:
-//   1. PEXELS_API_KEY set → search Pexels and return a curated stock photo
-//      (fast, free, no generation cost). This is the default image source.
-//   2. else OPENAI_API_KEY set → generate an image with gpt-image.
-//   3. else → a friendly "configure a key" error.
+// Stock photos come from Pexels, preferably THROUGH NabuGate's photo proxy
+// (GET {NABU_BASE_URL}/v1/photos/search) so the Pexels key stays a gateway
+// secret and this project only needs its NabuGate key. Preference order:
+//   1. NABU_BASE_URL set → NabuGate photo proxy (Pexels behind the gateway).
+//   2. else PEXELS_API_KEY set → talk to Pexels directly (legacy/local mode).
+//   3. else OPENAI_API_KEY set → generate an image with gpt-image.
+//   4. else → a friendly "configure a key" error.
+
+// hasStockSource reports whether any stock-photo path is configured.
+function hasStockSource() {
+  return !!(process.env.NABU_BASE_URL || process.env.PEXELS_API_KEY);
+}
+
+// nabuPhotoSearch calls NabuGate's normalized Pexels proxy. Same response
+// shape as Pexels itself (photos[].src sizes, photographer, total_results),
+// so both stock paths below can share the shaping code.
+async function nabuPhotoSearch(params) {
+  const base = process.env.NABU_BASE_URL.replace(/\/+$/, '');
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== '') qs.set(k, String(v));
+  }
+  const r = await fetch(base + '/v1/photos/search?' + qs.toString(), {
+    headers: { Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '') }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate photos error ' + r.status));
+  return data;
+}
+
+// pexelsRequest hits the Pexels API directly (legacy mode, PEXELS_API_KEY).
+async function pexelsRequest(endpoint, params) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== '') qs.set(k, String(v));
+  }
+  const r = await fetch('https://api.pexels.com/v1/' + endpoint + '?' + qs.toString(), {
+    headers: { Authorization: process.env.PEXELS_API_KEY }
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  return data;
+}
+
+// stockSearch is the single entry point for stock photos: NabuGate proxy when
+// configured, direct Pexels otherwise. `query: ""` means the curated feed.
+async function stockSearch(params) {
+  if (process.env.NABU_BASE_URL) return nabuPhotoSearch(params);
+  const { query } = params;
+  if (query) return pexelsRequest('search', params);
+  return pexelsRequest('curated', { page: params.page, per_page: params.per_page });
+}
 
 // English query terms per field — Pexels indexes English best, and the card
 // copy is often Persian, so we drive the search from the field of work.
@@ -218,26 +265,20 @@ function buildPexelsQuery(o) {
 }
 
 async function pexelsImage(o) {
-  const key = process.env.PEXELS_API_KEY;
   const query = buildPexelsQuery(o);
-  const perPage = 15;
-  const url = 'https://api.pexels.com/v1/search?query=' + encodeURIComponent(query) +
-    '&orientation=landscape&size=large&per_page=' + perPage;
-  const r = await fetch(url, { headers: { Authorization: key } });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  const data = await stockSearch({ query: query, orientation: 'landscape', size: 'large', per_page: 15 });
   const photos = (data && data.photos) || [];
-  if (!photos.length) throw new Error('No Pexels photos for "' + query + '"');
+  if (!photos.length) throw new Error('No stock photos for "' + query + '"');
   // pick a random result so repeated clicks give variety
   const pick = photos[Math.floor(Math.random() * photos.length)];
   const src = pick.src || {};
   return {
-    url: src.landscape || src.large || src.original,
-    source: 'pexels',
+    url: src.landscape || src.large2x || src.large || src.original,
+    source: process.env.NABU_BASE_URL ? 'nabugate-pexels' : 'pexels',
     query: query,
     photographer: pick.photographer,
     photographer_url: pick.photographer_url,
-    pexels_url: pick.url
+    pexels_url: pick.url || pick.pexels_url
   };
 }
 
@@ -288,20 +329,20 @@ async function openaiImage(o) {
 app.post('/api/image', async (req, res) => {
   if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
   const body = req.body || {};
-  const hasPexels = !!process.env.PEXELS_API_KEY;
+  const hasStock = hasStockSource();
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
 
-  if (!hasPexels && !hasOpenAI) {
-    return res.status(400).json({ error: 'No image source configured. Set PEXELS_API_KEY (stock photos) or OPENAI_API_KEY (AI) on the server.' });
+  if (!hasStock && !hasOpenAI) {
+    return res.status(400).json({ error: 'No image source configured. Set NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, PEXELS_API_KEY (direct stock photos) or OPENAI_API_KEY (AI) on the server.' });
   }
 
-  // Prefer Pexels stock photos when configured; fall back to OpenAI on failure.
-  if (hasPexels) {
+  // Prefer stock photos when configured; fall back to OpenAI on failure.
+  if (hasStock) {
     try {
       return res.json(await pexelsImage(body));
     } catch (err) {
       if (!hasOpenAI) return res.status(502).json({ error: String(err && err.message ? err.message : err) });
-      console.warn('Pexels image failed, falling back to OpenAI:', err && err.message);
+      console.warn('Stock image failed, falling back to OpenAI:', err && err.message);
     }
   }
 
@@ -349,39 +390,32 @@ function clampInt(n, def, min, max) {
 }
 
 async function pexelsSearch(opts) {
-  const key = process.env.PEXELS_API_KEY;
   const query = String(opts.query || '').trim();
   const page = clampInt(opts.page, 1, 1, 1000);
   const perPage = clampInt(opts.per_page, 24, 1, 80); // Pexels caps per_page at 80
-  const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-  let endpoint;
-  if (query) {
-    endpoint = 'search';
-    params.set('query', query);
-    const orientation = String(opts.orientation || '').trim();
-    if (['landscape', 'portrait', 'square'].includes(orientation)) params.set('orientation', orientation);
-  } else {
-    endpoint = 'curated'; // no query → a nice default feed
-  }
-  const url = 'https://api.pexels.com/v1/' + endpoint + '?' + params.toString();
-  const r = await fetch(url, { headers: { Authorization: key } });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((data && (data.error || data.code)) || ('Pexels API error ' + r.status));
+  const orientation = String(opts.orientation || '').trim();
+  const data = await stockSearch({
+    query: query,
+    page: page,
+    per_page: perPage,
+    orientation: ['landscape', 'portrait', 'square'].includes(orientation) ? orientation : ''
+  });
   const photos = ((data && data.photos) || []).map(normalizePexelsPhoto);
+  const total = (data && data.total_results) || photos.length;
   return {
     query: query,
     page: page,
     per_page: perPage,
-    total_results: (data && data.total_results) || photos.length,
-    next_page: !!(data && data.next_page),
+    total_results: total,
+    next_page: !!(data && data.next_page) || page * perPage < total,
     photos: photos
   };
 }
 
 app.get('/api/gallery', async (req, res) => {
   if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for the gallery.' });
-  if (!process.env.PEXELS_API_KEY) {
-    return res.status(400).json({ error: 'PEXELS_API_KEY is not set on the server. Add it to enable image search (get a free key at https://www.pexels.com/api/).' });
+  if (!hasStockSource()) {
+    return res.status(400).json({ error: 'No stock-photo source configured. Set NABU_BASE_URL (+NABU_API_KEY) to use the gateway photo proxy, or PEXELS_API_KEY for direct access (free key at https://www.pexels.com/api/).' });
   }
   try {
     const out = await pexelsSearch(req.query || {});
