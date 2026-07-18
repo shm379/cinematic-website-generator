@@ -251,7 +251,7 @@
     }
     fetch('/api/generate-from-prompt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: p, lang: state.lang })
+      body: JSON.stringify({ prompt: p, lang: (cfg && cfg.lang) || 'fa' })
     }).then(function (r) {
       if (!r.ok) throw new Error('server');
       return r.json();
