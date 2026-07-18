@@ -206,7 +206,7 @@
     cfg = buildFromPreset(f, keepBrand, lang);
     $$('.field-card', wzFields).forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-field') === f); });
     markSwitching();
-    syncForm(); preview();
+    syncForm(); preview(); hydratePhotos();
   }
 
   // Field switches reload the (heavy) preview iframe; until the new field paints,
@@ -246,12 +246,12 @@
     var btn = this, old = btn.textContent;
     btn.disabled = true; btn.textContent = '… در حال ساخت';
     function finish(g, msg) {
-      applyGenerated(g); syncForm(); preview(); showStep(4);
+      applyGenerated(g); syncForm(); preview(); hydratePhotos(); showStep(4);
       btn.disabled = false; btn.textContent = old; toast(msg);
     }
     fetch('/api/generate-from-prompt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: p, lang: cfg && cfg.lang })
+      body: JSON.stringify({ prompt: p, lang: (cfg && cfg.lang) || 'fa' })
     }).then(function (r) {
       if (!r.ok) throw new Error('server');
       return r.json();
@@ -300,13 +300,13 @@
       '<div class="wz-row"><input class="wz-input c-name" placeholder="نام"><input class="wz-input c-price" placeholder="قیمت"></div>' +
       '<input class="wz-input c-desc" style="margin-top:10px" placeholder="توضیح کوتاه">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">' +
-        '<button type="button" class="btn btn-ghost c-img" style="font-size:12px;padding:9px 13px">🎨 ساخت عکس</button>' +
+        '<button type="button" class="btn btn-ghost c-img" style="font-size:12px;padding:9px 13px">🎨 عکسِ دیگر</button>' +
         '<span class="c-imgstatus" style="font-size:11px;color:var(--faint)"></span>' +
       '</div>';
     wzCards.appendChild(d);
   }
 
-  /* ----- AI image generation (needs server + OPENAI_API_KEY) ----- */
+  /* ----- card images (Pexels stock photos, or OpenAI if configured) ----- */
   var imgStyle = 'cinematic';
   $$('#wzImgStyle button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -323,7 +323,7 @@
     var status = btn.parentElement.querySelector('.c-imgstatus');
     var it = cfg.items[i] || {};
     var label = CWG.presetFor(cfg.field).label;
-    btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال ساخت';
+    btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال گرفتن عکس';
     status.textContent = '';
     fetch('/api/image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -335,13 +335,50 @@
       .then(function (o) {
         btn.disabled = false; btn.textContent = old;
         if (!o.ok) { status.textContent = o.d && o.d.error ? o.d.error : 'خطا'; return; }
-        cfg.items[i].image = location.origin + o.d.url;
-        status.textContent = '✓ ساخته شد';
+        var u = (o.d && o.d.url) || '';
+        // Pexels returns an absolute URL; the OpenAI path returns a same-origin path.
+        cfg.items[i].image = /^https?:\/\//i.test(u) ? u : (location.origin + u);
+        status.textContent = o.d && o.d.source === 'pexels' ? '✓ از Pexels' : '✓ ساخته شد';
         preview();
       }).catch(function () {
         btn.disabled = false; btn.textContent = old;
         status.textContent = 'نیازمندِ سرور است';
       });
+  }
+
+  /* ----- auto-fill card photos from the stock-photo proxy -----
+     Presets ship copy but no photos, so a generated site would otherwise show
+     only gradient placeholders. When a field is loaded, pull a batch of stock
+     photos for it and drop them into the cards (keeping any the user made by
+     hand). Silent no-op on a static host / when no photo key is configured. */
+  var photoCache = {};   // field → [url, ...] (avoids re-fetching on re-select)
+  var photoSeq = 0;      // guards against a slow response for a now-stale field
+  function applyPhotos(urls) {
+    if (!cfg || !urls || !urls.length) return;
+    var changed = false;
+    (cfg.items || []).forEach(function (it, i) {
+      if (!it.image && urls[i]) { it.image = urls[i]; changed = true; }
+    });
+    if (changed) preview();
+  }
+  function hydratePhotos() {
+    if (!cfg || !cfg.items || !cfg.items.length) return;
+    var field = cfg.field;
+    if (photoCache[field]) { applyPhotos(photoCache[field]); return; }
+    var seq = ++photoSeq;
+    fetch('/api/photos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: field, style: imgStyle, count: cfg.items.length })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.photos || !d.photos.length) return;
+        var urls = d.photos.map(function (p) { return p.url; }).filter(Boolean);
+        if (!urls.length) return;
+        photoCache[field] = urls;
+        // ignore if the user has since switched to a different field
+        if (seq === photoSeq && cfg && cfg.field === field) applyPhotos(urls);
+      })
+      .catch(function () { /* static host / no key → cards keep placeholders */ });
   }
 
   /* ----- simple text inputs bound to cfg ----- */
@@ -432,7 +469,7 @@
     }
     // a restored draft whose brand differs from its field's preset label was user-set
     brandTouched = !!(cfg.brand && cfg.brand !== 'برند تو' && cfg.brand !== CWG.presetFor(cfg.field).label);
-    syncForm(); preview(); showStep(0);
+    syncForm(); preview(); hydratePhotos(); showStep(0);
     wizard.classList.add('show'); document.body.style.overflow = 'hidden';
   }
   function closeWizard() { wizard.classList.remove('show'); document.body.style.overflow = ''; }
