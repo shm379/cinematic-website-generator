@@ -282,6 +282,46 @@ async function pexelsImage(o) {
   };
 }
 
+// pexelsPhotos returns up to `count` DISTINCT stock photos for a field in a
+// single search — used to hydrate all collection cards at once so a generated
+// site shows real photography by default, instead of one manual call per card.
+async function pexelsPhotos(o) {
+  const count = clampInt(o.count, 3, 1, 12);
+  const query = buildPexelsQuery(o);
+  // over-fetch so we can drop duplicates and still return `count` distinct shots
+  const perPage = Math.min(80, Math.max(15, count * 4));
+  const data = await stockSearch({ query: query, orientation: 'landscape', size: 'large', per_page: perPage });
+  const photos = (data && data.photos) || [];
+  if (!photos.length) throw new Error('No stock photos for "' + query + '"');
+  // shuffle for variety, then take distinct-by-id
+  const pool = photos.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+  }
+  const seen = new Set();
+  const out = [];
+  for (const p of pool) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    const src = p.src || {};
+    const url = src.landscape || src.large2x || src.large || src.original;
+    if (!url) continue;
+    out.push({
+      url: url,
+      photographer: p.photographer,
+      photographer_url: p.photographer_url,
+      pexels_url: p.url || p.pexels_url
+    });
+    if (out.length >= count) break;
+  }
+  return {
+    photos: out,
+    source: process.env.NABU_BASE_URL ? 'nabugate-pexels' : 'pexels',
+    query: query
+  };
+}
+
 const IMAGE_STYLES = {
   cinematic: 'cinematic, dramatic moody lighting, shallow depth of field, atmospheric, premium film still',
   product: 'clean product photography, soft studio lighting, minimal uncluttered background, centred, crisp detail, e-commerce hero',
@@ -348,6 +388,25 @@ app.post('/api/image', async (req, res) => {
 
   try {
     return res.json(await openaiImage(body));
+  } catch (err) {
+    res.status(502).json({ error: String(err && err.message ? err.message : err) });
+  }
+});
+
+// --- API: batch card photos ----------------------------------------------
+// POST /api/photos  body: { field, style, query?, count? }
+//   → { photos: [{ url, photographer, ... }], source, query }
+//
+// Batch sibling of /api/image: one stock search, several DISTINCT photos, so
+// the wizard can fill every collection card in a single request (the generated
+// site shows photography by default). Stock-only — no per-card AI fallback here.
+app.post('/api/photos', async (req, res) => {
+  if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
+  if (!hasStockSource()) {
+    return res.status(400).json({ error: 'No stock-photo source configured. Set NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, or PEXELS_API_KEY for direct access (free key at https://www.pexels.com/api/).' });
+  }
+  try {
+    res.json(await pexelsPhotos(req.body || {}));
   } catch (err) {
     res.status(502).json({ error: String(err && err.message ? err.message : err) });
   }
