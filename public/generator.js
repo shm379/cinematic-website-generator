@@ -772,8 +772,11 @@
     var bg = cfg.bg || preset.bg;
     var brand = cfg.brand || preset.label;
 
-    var overlays = cfg.overlays || preset.overlays;
-    var items = cfg.items || preset.items;
+    // Guard by TYPE, not just null: a malformed non-array (e.g. a string sent
+    // to POST /api/generate) would otherwise reach the .map()/.slice() calls in
+    // generate() and throw a TypeError. Fall back to the preset defaults.
+    var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
+    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
 
     return {
       brand: brand,
@@ -797,7 +800,7 @@
       newsletterPlaceholder: cfg.newsletterPlaceholder || (lang === 'en' ? 'your email' : 'ایمیل شما'),
       shopLabel: cfg.shopLabel || (lang === 'en' ? 'SHOP' : 'سفارش'),
       footerNote: cfg.footerNote || preset.footerNote,
-      footerLinks: cfg.footerLinks || (lang === 'en'
+      footerLinks: Array.isArray(cfg.footerLinks) ? cfg.footerLinks : (lang === 'en'
         ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
         : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
       year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵')
