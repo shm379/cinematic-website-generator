@@ -80,6 +80,19 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeColor validates a user-supplied colour before it is injected raw into
+  // a <style> block, so a value like "</style><script>…" can never break out of
+  // the CSS and inject markup. Anything not clearly a colour falls back to the
+  // (always-safe) preset default. Accepts #hex, rgb()/hsl() functions and plain
+  // named colours — everything the panels and presets actually emit.
+  function safeColor(c, fallback) {
+    var s = String(c == null ? '' : c).trim();
+    if (/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s)) return s;
+    if (/^(rgb|rgba|hsl|hsla)\(\s*[0-9.,%/\s]+\)$/i.test(s)) return s;
+    if (/^[a-zA-Z]+$/.test(s)) return s;
+    return fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -611,6 +624,17 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // safeJson serialises a value for embedding inside an inline <script> tag.
+  // JSON.stringify does NOT escape "<" or "/", so a string such as
+  // "</script><script>…" (e.g. an attacker-supplied brand via /api/site) would
+  // otherwise close the script element and inject markup. Escaping "<", ">" and
+  // "&" (plus the JS line separators) keeps the payload inert as text.
+  function safeJson(obj) {
+    return JSON.stringify(obj)
+      .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
+      .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  }
+
   // beats for overlay groups (in/out in timeline units 0..100)
   function beatsFor(n) {
     if (n <= 1) return [[30, 70]];
@@ -768,8 +792,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
@@ -922,7 +946,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + safeJson(siteRuntime) + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
