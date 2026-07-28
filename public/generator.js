@@ -862,6 +862,14 @@
 
     var engine = '(' + engineSource.toString() + ')();';
 
+    // Serialise the runtime config for an inline <script>. JSON.stringify does
+    // NOT escape "<", so a user-controlled value (e.g. brand or accent) that
+    // contains "</script>" would close this script element in the HTML parser
+    // and inject arbitrary markup — a reflected XSS via /api/site?brand=… and
+    // broken output for legitimate brands. Escaping every "<" as a unicode
+    // escape is valid in both JSON and JS strings and makes the payload inert.
+    var siteJson = JSON.stringify(siteRuntime).replace(/</g, '\\u003c');
+
     var html =
 '<!DOCTYPE html>\n' +
 '<html lang="' + (rtl ? 'fa' : 'en') + '" dir="' + (rtl ? 'rtl' : 'ltr') + '">\n' +
@@ -922,7 +930,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + siteJson + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
