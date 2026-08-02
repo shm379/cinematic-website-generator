@@ -80,6 +80,16 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeColor guarantees a value that is safe to drop verbatim into CSS. Theme
+  // colours (accent/bg) reach the generated page unescaped inside <style>, so a
+  // crafted value like "</style><script>…" would otherwise inject markup
+  // (reflected XSS via GET /api/site?accent=…). Anything that is not a plain
+  // #RGB / #RGBA / #RRGGBB / #RRGGBBAA hex falls back to the trusted default.
+  function safeColor(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s) ? s : fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +778,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
@@ -862,6 +872,13 @@
 
     var engine = '(' + engineSource.toString() + ')();';
 
+    // Serialise the runtime config for the inline <script>. JSON.stringify does
+    // NOT escape "</script>", so a brand (or any string) containing it would
+    // close the tag early and inject markup (reflected XSS via
+    // /api/site?brand=…). Replacing every "<" with its unicode escape keeps
+    // the JSON valid while making a "</script>" / "<!--" breakout impossible.
+    var siteJson = JSON.stringify(siteRuntime).replace(/</g, '\\u003c');
+
     var html =
 '<!DOCTYPE html>\n' +
 '<html lang="' + (rtl ? 'fa' : 'en') + '" dir="' + (rtl ? 'rtl' : 'ltr') + '">\n' +
@@ -922,7 +939,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + siteJson + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
