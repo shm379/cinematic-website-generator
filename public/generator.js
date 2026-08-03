@@ -80,6 +80,16 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeHex normalises an untrusted colour to a strict #rgb / #rrggbb hex, or
+  // returns the given fallback. accent/bg are echoed RAW into the generated
+  // page's <style> block, so anything else (e.g. "red}</style><script>…") must
+  // never survive — this blocks CSS/style-breakout injection at the source.
+  function safeHex(v, fallback) {
+    var h = String(v == null ? '' : v).trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(h) || /^[0-9a-fA-F]{6}$/.test(h)) return '#' + h;
+    return fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +778,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeHex(cfg.accent, preset.accent);
+    var bg = safeHex(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
@@ -862,6 +872,10 @@
 
     var engine = '(' + engineSource.toString() + ')();';
 
+    // Escape "<" so an untrusted value (e.g. brand or motif from /api/site) that
+    // contains "</script>" cannot break out of the inline runtime <script> tag.
+    var siteJson = JSON.stringify(siteRuntime).replace(/</g, '\\u003c');
+
     var html =
 '<!DOCTYPE html>\n' +
 '<html lang="' + (rtl ? 'fa' : 'en') + '" dir="' + (rtl ? 'rtl' : 'ltr') + '">\n' +
@@ -922,7 +936,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + siteJson + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
