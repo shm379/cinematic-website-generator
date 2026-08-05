@@ -860,6 +860,14 @@
       theme: { accent: accent, bg: bg, motif: c.theme.motif }
     };
 
+    // Serialise the runtime config for an inline <script>. JSON.stringify does
+    // NOT escape '<', so a brand containing "</script>" would close the tag
+    // early and inject markup (reflected XSS via /api/site?brand=…). Escape the
+    // few characters that are unsafe inside an inline script / HTML.
+    var siteJson = JSON.stringify(siteRuntime)
+      .replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
+      .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+
     var engine = '(' + engineSource.toString() + ')();';
 
     var html =
@@ -922,7 +930,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + siteJson + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
