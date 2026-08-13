@@ -80,6 +80,18 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // sanitizeColor keeps only plain hex colours (#rgb, #rgba, #rrggbb, #rrggbbaa).
+  // accent/bg are interpolated RAW into the generated <style> block, so any other
+  // value (e.g. "#fff}</style><script>…") would break out of the CSS context and
+  // inject markup. Anything that isn't a hex colour falls back to a safe default.
+  function sanitizeColor(input, fallback) {
+    var s = String(input == null ? '' : input).trim();
+    if (/^#?([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s)) {
+      return s.charAt(0) === '#' ? s : '#' + s;
+    }
+    return fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +780,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = sanitizeColor(cfg.accent, preset.accent);
+    var bg = sanitizeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
@@ -860,6 +872,11 @@
       theme: { accent: accent, bg: bg, motif: c.theme.motif }
     };
 
+    // Serialise the runtime config for an inline <script>. Escape '<' so a value
+    // containing "</script>" (e.g. an attacker-supplied brand) can't terminate
+    // the script element and inject markup; < stays valid JSON.
+    var siteJson = JSON.stringify(siteRuntime).replace(/</g, '\\u003c');
+
     var engine = '(' + engineSource.toString() + ')();';
 
     var html =
@@ -922,7 +939,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + siteJson + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
