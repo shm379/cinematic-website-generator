@@ -772,8 +772,12 @@
     var bg = cfg.bg || preset.bg;
     var brand = cfg.brand || preset.label;
 
-    var overlays = cfg.overlays || preset.overlays;
-    var items = cfg.items || preset.items;
+    // overlays/items must be arrays — generate() maps over them. An AI backend
+    // (see /api/generate-from-prompt) can return valid JSON with these wrongly
+    // typed (e.g. a bare string), which would otherwise crash generate(); fall
+    // back to the preset's arrays so the "always returns a result" path holds.
+    var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
+    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
 
     return {
       brand: brand,
