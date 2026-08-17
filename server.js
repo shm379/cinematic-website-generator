@@ -178,18 +178,23 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   }
 });
 
-// --- Images: stock photos (primary) or OpenAI generation (fallback) --------
+// --- Images: AI generation (preferred) → stock photos → OpenAI fallback --------
 //
 // POST /api/image  body: { field, style, brand, accent, prompt, size, query? }
 //   → { url, source, ... }
 //
-// Stock photos come from Pexels, preferably THROUGH NabuGate's photo proxy
-// (GET {NABU_BASE_URL}/v1/photos/search) so the Pexels key stays a gateway
-// secret and this project only needs its NabuGate key. Preference order:
-//   1. NABU_BASE_URL set → NabuGate photo proxy (Pexels behind the gateway).
-//   2. else PEXELS_API_KEY set → talk to Pexels directly (legacy/local mode).
-//   3. else OPENAI_API_KEY set → generate an image with gpt-image.
-//   4. else → a friendly "configure a key" error.
+// Preference order:
+//   1. NABU_BASE_URL + NABU_IMAGE_MODEL set → NabuGate AI image generation
+//      (routes through the gateway, e.g. to imagen.nabuxai.com / mrc_imaggen).
+//   2. NABU_BASE_URL set → NabuGate photo proxy (Pexels behind the gateway).
+//   3. PEXELS_API_KEY set → talk to Pexels directly (legacy/local mode).
+//   4. OPENAI_API_KEY set → generate an image with gpt-image.
+//   5. else → a friendly "configure a key" error.
+
+// hasNabuImageSource reports whether the gateway can generate images for us.
+function hasNabuImageSource() {
+  return !!(process.env.NABU_BASE_URL && process.env.NABU_IMAGE_MODEL);
+}
 
 // hasStockSource reports whether any stock-photo path is configured.
 function hasStockSource() {
@@ -366,17 +371,114 @@ async function openaiImage(o) {
   return { url: '/generated/' + id + '.png', source: 'openai', prompt: prompt };
 }
 
+// saveGeneratedImage writes a base64 image to public/generated and returns a
+// same-origin URL. Used by both the NabuGate and OpenAI image paths.
+function saveGeneratedImage(b64, ext) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const dir = path.join(__dirname, 'public', 'generated');
+  fs.mkdirSync(dir, { recursive: true });
+  const fileName = id + (ext || '.png');
+  fs.writeFileSync(path.join(dir, fileName), Buffer.from(b64, 'base64'));
+  return '/generated/' + fileName;
+}
+
+// normalizeImageItem handles both b64_json and url responses from an
+// OpenAI-compatible image generation endpoint.
+function normalizeImageItem(item) {
+  if (!item) return null;
+  if (item.b64_json) return { url: saveGeneratedImage(item.b64_json, '.png') };
+  if (item.url) return { url: item.url };
+  return null;
+}
+
+// nabuImage calls the NabuGate OpenAI-compatible image generation endpoint.
+// Set NABU_IMAGE_MODEL (e.g. "mrc_imaggen") to enable this path.
+async function nabuImage(o) {
+  const base = process.env.NABU_BASE_URL;
+  const model = process.env.NABU_IMAGE_MODEL;
+  if (!base || !model) return null;
+  const prompt = buildImagePrompt(o);
+  const r = await fetch(base.replace(/\/+$/, '') + '/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '')
+    },
+    body: JSON.stringify({
+      model: model,
+      prompt: prompt,
+      n: 1,
+      size: o.size || '1536x1024'
+    })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate image error ' + r.status));
+  const item = normalizeImageItem(data.data && data.data[0]);
+  if (!item) throw new Error('no image returned');
+  return { url: item.url, source: 'nabugate', prompt: prompt };
+}
+
+// nabuPhotos batches several distinct AI-generated images for the collection
+// cards in one request. Falls back to separate calls if the gateway does not
+// honour n > 1.
+async function nabuPhotos(o) {
+  const base = process.env.NABU_BASE_URL;
+  const model = process.env.NABU_IMAGE_MODEL;
+  if (!base || !model) return null;
+  const count = clampInt(o.count, 3, 1, 12);
+  const prompt = buildImagePrompt(o);
+  const r = await fetch(base.replace(/\/+$/, '') + '/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + (process.env.NABU_API_KEY || '')
+    },
+    body: JSON.stringify({
+      model: model,
+      prompt: prompt,
+      n: count,
+      size: o.size || '1536x1024'
+    })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data.error && data.error.message) || ('NabuGate photos error ' + r.status));
+  const items = (data.data || []).slice(0, count);
+  if (!items.length) {
+    // Some gateways ignore n > 1; fall back to serial single generations.
+    const photos = [];
+    for (let i = 0; i < count; i++) {
+      const one = await nabuImage(Object.assign({}, o, { prompt: prompt + ' — variation ' + (i + 1) }));
+      photos.push({ url: one.url });
+    }
+    return { photos: photos, source: 'nabugate', prompt: prompt };
+  }
+  const photos = items.map(normalizeImageItem).filter(Boolean);
+  if (!photos.length) throw new Error('no images returned');
+  return { photos: photos, source: 'nabugate', prompt: prompt };
+}
+
 app.post('/api/image', async (req, res) => {
   if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
   const body = req.body || {};
+  const hasNabuImg = hasNabuImageSource();
   const hasStock = hasStockSource();
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
 
-  if (!hasStock && !hasOpenAI) {
-    return res.status(400).json({ error: 'No image source configured. Set NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, PEXELS_API_KEY (direct stock photos) or OPENAI_API_KEY (AI) on the server.' });
+  if (!hasNabuImg && !hasStock && !hasOpenAI) {
+    return res.status(400).json({ error: 'No image source configured. Set NABU_BASE_URL + NABU_IMAGE_MODEL for AI generation, or NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, or PEXELS_API_KEY (direct stock photos) or OPENAI_API_KEY (AI) on the server.' });
   }
 
-  // Prefer stock photos when configured; fall back to OpenAI on failure.
+  // 1) NabuGate AI image generation — preferred when configured.
+  if (hasNabuImg) {
+    try {
+      return res.json(await nabuImage(body));
+    } catch (err) {
+      console.warn('NabuGate image failed, trying next:', err && err.message);
+      if (!hasStock && !hasOpenAI) return res.status(502).json({ error: String(err && err.message ? err.message : err) });
+    }
+  }
+
+  // 2) Stock photos.
   if (hasStock) {
     try {
       return res.json(await pexelsImage(body));
@@ -386,6 +488,7 @@ app.post('/api/image', async (req, res) => {
     }
   }
 
+  // 3) OpenAI fallback.
   try {
     return res.json(await openaiImage(body));
   } catch (err) {
@@ -397,16 +500,19 @@ app.post('/api/image', async (req, res) => {
 // POST /api/photos  body: { field, style, query?, count? }
 //   → { photos: [{ url, photographer, ... }], source, query }
 //
-// Batch sibling of /api/image: one stock search, several DISTINCT photos, so
-// the wizard can fill every collection card in a single request (the generated
-// site shows photography by default). Stock-only — no per-card AI fallback here.
+// Batch sibling of /api/image: fills every collection card in a single
+// request so a generated site shows photography by default. Uses NabuGate AI
+// generation when configured, otherwise stock photos.
 app.post('/api/photos', async (req, res) => {
   if (typeof fetch !== 'function') return res.status(500).json({ error: 'Node 18+ (global fetch) is required for images.' });
-  if (!hasStockSource()) {
-    return res.status(400).json({ error: 'No stock-photo source configured. Set NABU_BASE_URL (+NABU_API_KEY) for the gateway photo proxy, or PEXELS_API_KEY for direct access (free key at https://www.pexels.com/api/).' });
+  const hasNabuImg = hasNabuImageSource();
+  const hasStock = hasStockSource();
+  if (!hasNabuImg && !hasStock) {
+    return res.status(400).json({ error: 'No image source configured. Set NABU_BASE_URL + NABU_IMAGE_MODEL for AI generation, or NABU_BASE_URL (+NABU_API_KEY) / PEXELS_API_KEY for stock photos.' });
   }
   try {
-    res.json(await pexelsPhotos(req.body || {}));
+    if (hasNabuImg) return res.json(await nabuPhotos(req.body || {}));
+    return res.json(await pexelsPhotos(req.body || {}));
   } catch (err) {
     res.status(502).json({ error: String(err && err.message ? err.message : err) });
   }
