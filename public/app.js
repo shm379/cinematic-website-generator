@@ -296,17 +296,30 @@
   var wzCards = $('#wzCards');
   for (var k = 0; k < 3; k++) {
     var d = document.createElement('div'); d.className = 'cardmini'; d.setAttribute('data-i', k);
-    d.innerHTML = '<h5>کارت ' + (k + 1) + '</h5>' +
+    d.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<h5>کارت ' + (k + 1) + '</h5>' +
+        '<div class="c-thumb-wrap" style="display:flex;align-items:center;gap:6px">' +
+          '<img class="c-thumb" style="width:36px;height:24px;border-radius:4px;object-fit:cover;border:1px solid var(--line);display:none">' +
+          '<button type="button" class="btn-clean c-delimg" style="display:none;color:#ef4444;font-size:12px;cursor:pointer">✕ حذف عکس</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="wz-row"><input class="wz-input c-name" placeholder="نام"><input class="wz-input c-price" placeholder="قیمت"></div>' +
       '<input class="wz-input c-desc" style="margin-top:10px" placeholder="توضیح کوتاه">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">' +
-        '<button type="button" class="btn btn-ghost c-img" style="font-size:12px;padding:9px 13px">🎨 عکسِ دیگر</button>' +
-        '<span class="c-imgstatus" style="font-size:11px;color:var(--faint)"></span>' +
+      '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          '<label class="btn btn-ghost" style="font-size:12px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">' +
+            '📁 بارگذاری فایل' +
+            '<input type="file" class="c-file" accept="image/*" style="display:none">' +
+          '</label>' +
+          '<button type="button" class="btn btn-ghost c-img" style="font-size:12px;padding:7px 12px">🎨 تولید AI / Pexels</button>' +
+          '<span class="c-imgstatus" style="font-size:11px;color:var(--faint)"></span>' +
+        '</div>' +
+        '<input class="wz-input c-imgurl" style="font-size:12px;padding:8px" placeholder="یا لینک تصویر را اینجا بچسبانید (https://...)">' +
       '</div>';
     wzCards.appendChild(d);
   }
 
-  /* ----- card images (Pexels stock photos, or OpenAI if configured) ----- */
+  /* ----- card images (File upload, URL input, Pexels stock photos, or OpenAI if configured) ----- */
   var imgStyle = 'cinematic';
   $$('#wzImgStyle button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -314,13 +327,65 @@
       $$('#wzImgStyle button').forEach(function (x) { x.classList.toggle('on', x === b); });
     });
   });
+
+  wzCards.addEventListener('change', function (e) {
+    if (!e.target.classList.contains('c-file')) return;
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var box = e.target.closest('.cardmini'); var i = +box.getAttribute('data-i');
+    var status = box.querySelector('.c-imgstatus');
+    status.textContent = '… در حال بارگذاری';
+    var reader = new FileReader();
+    reader.onload = function () {
+      cfg.items[i].image = reader.result;
+      status.textContent = '✓ بارگذاری شد';
+      updateCardMediaUI(box, reader.result);
+      preview();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  wzCards.addEventListener('input', function (e) {
+    if (!e.target.classList.contains('c-imgurl')) return;
+    var box = e.target.closest('.cardmini'); var i = +box.getAttribute('data-i');
+    var url = e.target.value.trim();
+    cfg.items[i].image = url;
+    updateCardMediaUI(box, url);
+    previewDebounced();
+  });
+
   wzCards.addEventListener('click', function (e) {
+    if (e.target.classList.contains('c-delimg')) {
+      var box = e.target.closest('.cardmini'); var i = +box.getAttribute('data-i');
+      cfg.items[i].image = '';
+      box.querySelector('.c-imgurl').value = '';
+      box.querySelector('.c-imgstatus').textContent = '';
+      updateCardMediaUI(box, '');
+      preview();
+      return;
+    }
     var btn = e.target.closest('.c-img'); if (!btn) return;
     var box = btn.closest('.cardmini'); var i = +box.getAttribute('data-i');
     genCardImage(i, btn);
   });
+
+  function updateCardMediaUI(box, url) {
+    var thumb = box.querySelector('.c-thumb');
+    var delBtn = box.querySelector('.c-delimg');
+    if (url) {
+      thumb.src = url;
+      thumb.style.display = 'block';
+      delBtn.style.display = 'inline-block';
+    } else {
+      thumb.src = '';
+      thumb.style.display = 'none';
+      delBtn.style.display = 'none';
+    }
+  }
+
   function genCardImage(i, btn) {
-    var status = btn.parentElement.querySelector('.c-imgstatus');
+    var box = btn.closest('.cardmini');
+    var status = box.querySelector('.c-imgstatus');
     var it = cfg.items[i] || {};
     var label = CWG.presetFor(cfg.field).label;
     btn.disabled = true; var old = btn.textContent; btn.textContent = '… در حال گرفتن عکس';
@@ -336,8 +401,9 @@
         btn.disabled = false; btn.textContent = old;
         if (!o.ok) { status.textContent = o.d && o.d.error ? o.d.error : 'خطا'; return; }
         var u = (o.d && o.d.url) || '';
-        // Pexels returns an absolute URL; the OpenAI path returns a same-origin path.
         cfg.items[i].image = /^https?:\/\//i.test(u) ? u : (location.origin + u);
+        box.querySelector('.c-imgurl').value = cfg.items[i].image;
+        updateCardMediaUI(box, cfg.items[i].image);
         status.textContent = o.d && o.d.source === 'pexels' ? '✓ از Pexels' : '✓ ساخته شد';
         preview();
       }).catch(function () {
@@ -414,6 +480,8 @@
       $('.c-name', box).value = it.name || '';
       $('.c-price', box).value = it.price || '';
       $('.c-desc', box).value = it.desc || '';
+      $('.c-imgurl', box).value = it.image || '';
+      updateCardMediaUI(box, it.image || '');
     });
   }
 
