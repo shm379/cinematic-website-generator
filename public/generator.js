@@ -772,8 +772,10 @@
     var bg = cfg.bg || preset.bg;
     var brand = cfg.brand || preset.label;
 
-    var overlays = cfg.overlays || preset.overlays;
-    var items = cfg.items || preset.items;
+    // Fall back to the preset when a caller (or an LLM) supplies a non-array
+    // for overlays/items — otherwise generate() would crash on .slice/.map.
+    var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
+    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
 
     return {
       brand: brand,
@@ -797,7 +799,7 @@
       newsletterPlaceholder: cfg.newsletterPlaceholder || (lang === 'en' ? 'your email' : 'ایمیل شما'),
       shopLabel: cfg.shopLabel || (lang === 'en' ? 'SHOP' : 'سفارش'),
       footerNote: cfg.footerNote || preset.footerNote,
-      footerLinks: cfg.footerLinks || (lang === 'en'
+      footerLinks: (Array.isArray(cfg.footerLinks) ? cfg.footerLinks : null) || (lang === 'en'
         ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
         : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
       year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵')
@@ -826,7 +828,7 @@
       return '<div class="overlay ' + pos + '" id="ov' + (i + 2) + '" data-grp data-in="' + b[0] + '" data-out="' + b[1] + '">' + linesHtml + '</div>';
     }).join('\n  ');
 
-    var cardsHtml = (c.items || []).slice(0, 3).map(function (it, i) {
+    var cardsHtml = (c.items || []).slice(0, 3).filter(Boolean).map(function (it, i) {
       return buildCard(it, accent, i, lang);
     }).join('\n    ');
 
