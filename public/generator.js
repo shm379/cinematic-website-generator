@@ -80,6 +80,17 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeColor keeps only values that look like a CSS colour (hex / rgb() / hsl()
+  // / a colour keyword). Caller-supplied accent & bg are injected raw into the
+  // generated page's <style> block (and reached from GET /api/site?accent=…), so
+  // without this a value like "#f00}</style><script>…" would break out of the
+  // style element — a reflected XSS. Anything unexpected falls back to the preset.
+  function safeColor(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    if (s && /^[#a-zA-Z0-9().,%\/\s-]{1,64}$/.test(s)) return s;
+    return fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +779,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
