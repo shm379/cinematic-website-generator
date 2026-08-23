@@ -171,8 +171,13 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   // 3) keyless heuristic — always works.
   if (!config) config = CWG.parsePrompt(prompt);
   try {
+    // Render from the original `config`: generate() applies withDefaults() once
+    // internally. Passing the already-defaulted `full` would run withDefaults()
+    // twice, and since accent/bg/motif live under `theme` (not top-level) after
+    // the first pass, the second pass drops them back to the preset defaults —
+    // discarding the detected/AI accent colour and theme.
     const full = CWG.withDefaults(config);
-    res.json({ via: via, config: full, html: CWG.generate(full) });
+    res.json({ via: via, config: full, html: CWG.generate(config) });
   } catch (err) {
     res.status(400).json({ error: String(err && err.message ? err.message : err) });
   }
