@@ -80,6 +80,19 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeHex validates a colour to a strict #rgb / #rrggbb hex, falling back to
+  // `fallback` for anything else. accent/bg are interpolated RAW into the
+  // generated <style> block, so an unvalidated value like
+  //   "orange;}</style><script>…</script>"
+  // would break out and inject script (reflected XSS via /api/site & /api/generate).
+  function safeHex(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    if (/^#?[0-9a-fA-F]{3}$/.test(s) || /^#?[0-9a-fA-F]{6}$/.test(s)) {
+      return s.charAt(0) === '#' ? s : '#' + s;
+    }
+    return fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +781,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeHex(cfg.accent, preset.accent);
+    var bg = safeHex(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
