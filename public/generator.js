@@ -611,6 +611,18 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // jsonForScript serialises a value for safe embedding inside an inline
+  // <script> tag. JSON.stringify alone is NOT safe there: a value containing
+  // "</script>" (e.g. a user-supplied brand) would close the tag early and
+  // allow HTML/script injection. Escaping "<" (and the JS line separators
+  // U+2028/U+2029) neutralises that while keeping valid, equivalent JSON.
+  function jsonForScript(value) {
+    return JSON.stringify(value)
+      .replace(/</g, '\\u003c')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
+  }
+
   // beats for overlay groups (in/out in timeline units 0..100)
   function beatsFor(n) {
     if (n <= 1) return [[30, 70]];
@@ -922,7 +934,7 @@ fontLinks + '\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + JSON.stringify(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + jsonForScript(siteRuntime) + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
