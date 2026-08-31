@@ -80,6 +80,15 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeColor guards colours that are interpolated RAW into the generated CSS
+  // (e.g. ':root{--accent:...}'). Only #rgb / #rgba / #rrggbb / #rrggbbaa hex
+  // is allowed; anything else falls back — this blocks reflected XSS where a
+  // value like "#000</style><script>…" would break out of the <style> block.
+  function safeColor(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(s) ? s : fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -768,8 +777,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     var overlays = cfg.overlays || preset.overlays;
