@@ -960,11 +960,23 @@ fontLinks + '\n' +
     ['#c98a5e', ['قهوه‌ای', 'brown', 'caramel', 'کاراملی']]
   ];
 
+  // kwHit tests whether keyword kw appears in the (already-lowercased) text t.
+  // Very short latin tokens (e.g. "ai") must match as WHOLE words, otherwise
+  // they hit substrings like "retail"/"email"/"domain" and misclassify the
+  // field. Longer/Persian keywords keep plain substring matching so stemmed
+  // variants (application, gemstone, …) still match.
+  function kwHit(t, kw) {
+    if (kw.length <= 2 && /^[a-z]+$/.test(kw)) {
+      return new RegExp('(^|[^a-z])' + kw + '($|[^a-z])').test(t);
+    }
+    return t.indexOf(kw) !== -1;
+  }
+
   function detectField(t) {
     for (var i = 0; i < FIELD_KEYWORDS.length; i++) {
       var kws = FIELD_KEYWORDS[i][1];
       for (var j = 0; j < kws.length; j++) {
-        if (t.indexOf(kws[j].toLowerCase()) !== -1) return FIELD_KEYWORDS[i][0];
+        if (kwHit(t, kws[j].toLowerCase())) return FIELD_KEYWORDS[i][0];
       }
     }
     return '_default';
