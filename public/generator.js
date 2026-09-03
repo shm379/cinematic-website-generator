@@ -80,6 +80,16 @@
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
 
+  // safeColor guards against CSS/HTML injection: theme colours (accent, bg) are
+  // interpolated RAW into the generated <style> block, so a value like
+  // "</style><script>…" would break out and inject script. Only accept a plain
+  // hex colour (#rgb / #rgba / #rrggbb / #rrggbbaa); anything else falls back to
+  // the trusted preset colour.
+  function safeColor(value, fallback) {
+    var s = String(value == null ? '' : value).trim();
+    return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : fallback;
+  }
+
   /* ============================================================
      Field presets — the "say your field, get a site" magic.
      Each preset supplies a palette + motif + ready-made copy that the
@@ -780,8 +790,8 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
