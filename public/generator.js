@@ -638,15 +638,17 @@
   /* ---- context-safe serialisers -------------------------------------------
      The generated page is a single HTML string built from config the caller
      controls (and, via /api/site, straight from a URL query string). Each of
-     the three non-HTML contexts below needs its own escaping — HTML-escaping
-     is either wrong or not enough for them. */
+     the non-HTML contexts below needs its own escaping — HTML-escaping is
+     either wrong or not enough for them. */
 
-  // JSON embedded in a <script> element. Inside a script the HTML parser still
-  // looks for "</script", so a brand of `</script><script>alert(1)</script>`
-  // would otherwise close the element and run as markup. Escaping "<" (plus the
-  // two line separators that are literal in JSON but not in JS) makes the
-  // payload inert while keeping it valid JSON.
-  function safeJson(value) {
+  // jsonForScript serialises a value for safe embedding inside an inline
+  // <script> tag. JSON.stringify alone is NOT safe there: a value containing
+  // "</script>" (e.g. a user-supplied brand) would close the tag early and
+  // allow HTML/script injection. Escaping "<" (and the JS line separators
+  // U+2028/U+2029) neutralises that while keeping valid, equivalent JSON.
+  // ">" is escaped too, so the same helper is safe in the other embedded
+  // context this file now has: the application/ld+json block.
+  function jsonForScript(value) {
     return JSON.stringify(value)
       .replace(/</g, '\\u003c')
       .replace(/>/g, '\\u003e')
@@ -909,8 +911,10 @@ staticHeroCss(rtl),
     var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
-    var overlays = cfg.overlays || preset.overlays;
-    var items = cfg.items || preset.items;
+    // Guard against non-array shapes (e.g. an LLM emitting a string/object for
+    // these) — fall back to the preset so generate() never throws on .map/.slice.
+    var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
+    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
 
     return {
       brand: brand,
@@ -934,7 +938,7 @@ staticHeroCss(rtl),
       newsletterPlaceholder: cfg.newsletterPlaceholder || (lang === 'en' ? 'your email' : 'ایمیل شما'),
       shopLabel: cfg.shopLabel || (lang === 'en' ? 'SHOP' : 'سفارش'),
       footerNote: cfg.footerNote || preset.footerNote,
-      footerLinks: cfg.footerLinks || (lang === 'en'
+      footerLinks: Array.isArray(cfg.footerLinks) ? cfg.footerLinks : (lang === 'en'
         ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
         : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
       year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵'),
@@ -1042,7 +1046,7 @@ staticHeroCss(rtl),
         };
       });
     }
-    var jsonLd = '<script type="application/ld+json">' + safeJson(ld) + '</scr' + 'ipt>\n';
+    var jsonLd = '<script type="application/ld+json">' + jsonForScript(ld) + '</scr' + 'ipt>\n';
 
     /* --- the no-JavaScript path -------------------------------------------
        The loader is only ever dismissed by script, and body.loading pins the
@@ -1129,7 +1133,7 @@ jsonLd +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></scr' + 'ipt>\n' +
 '<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.20/dist/lenis.min.js"></scr' + 'ipt>\n' +
-'<script>window.__SITE__ = ' + safeJson(siteRuntime) + ';</scr' + 'ipt>\n' +
+'<script>window.__SITE__ = ' + jsonForScript(siteRuntime) + ';</scr' + 'ipt>\n' +
 '<script>' + engine + '</scr' + 'ipt>\n' +
 '</body>\n</html>\n';
 
@@ -1167,11 +1171,23 @@ jsonLd +
     ['#c98a5e', ['قهوه‌ای', 'brown', 'caramel', 'کاراملی']]
   ];
 
+  // kwHit tests whether keyword kw appears in the (already-lowercased) text t.
+  // Very short latin tokens (e.g. "ai") must match as WHOLE words, otherwise
+  // they hit substrings like "retail"/"email"/"domain" and misclassify the
+  // field. Longer/Persian keywords keep plain substring matching so stemmed
+  // variants (application, gemstone, …) still match.
+  function kwHit(t, kw) {
+    if (kw.length <= 2 && /^[a-z]+$/.test(kw)) {
+      return new RegExp('(^|[^a-z])' + kw + '($|[^a-z])').test(t);
+    }
+    return t.indexOf(kw) !== -1;
+  }
+
   function detectField(t) {
     for (var i = 0; i < FIELD_KEYWORDS.length; i++) {
       var kws = FIELD_KEYWORDS[i][1];
       for (var j = 0; j < kws.length; j++) {
-        if (t.indexOf(kws[j].toLowerCase()) !== -1) return FIELD_KEYWORDS[i][0];
+        if (kwHit(t, kws[j].toLowerCase())) return FIELD_KEYWORDS[i][0];
       }
     }
     return '_default';

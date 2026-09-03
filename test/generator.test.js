@@ -256,6 +256,26 @@ test('parsePrompt detects language, field, brand and accent', () => {
   assert.match(CWG.generate(bare), /^<!DOCTYPE html>/);
 });
 
+test('non-array overlays/items/footerLinks fall back to the preset', () => {
+  // an LLM answering the mega-prompt can emit a string or object where the
+  // schema says array; generate() must not throw on .map/.slice
+  for (const bad of ['a string', { not: 'an array' }, 42]) {
+    const cfg = CWG.withDefaults({ field: 'tea', overlays: bad, items: bad, footerLinks: bad });
+    assert.ok(Array.isArray(cfg.items) && cfg.items.length === 3);
+    assert.ok(Array.isArray(cfg.overlays) && cfg.overlays.length > 0);
+    assert.ok(Array.isArray(cfg.footerLinks));
+    assert.match(CWG.generate({ field: 'tea', items: bad, overlays: bad }), /^<!DOCTYPE html>/);
+  }
+});
+
+test('short latin keywords only match as whole words', () => {
+  // "ai" must not fire inside retail/email/domain and misclassify the field
+  assert.equal(CWG.parsePrompt('a retail brand for email campaigns').field, '_default');
+  assert.equal(CWG.parsePrompt('we build ai tools').field, 'tech');
+  // longer keywords keep substring matching so stemmed variants still hit
+  assert.equal(CWG.parsePrompt('our application platform').field, 'tech');
+});
+
 test('parsePrompt output flows through generate unchanged', () => {
   const html = CWG.generate(CWG.parsePrompt('رستوران «شمس» با رنگ قرمز'));
   assert.match(html, /شمس/);
