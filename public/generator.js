@@ -293,6 +293,10 @@
     var lenis = null;
 
     var lightMode = window.matchMedia('(max-width: 768px)').matches;
+    // Honoured for real, not just in CSS: no pinning, no scrubbing, and no
+    // continuous canvas loop. The scene is still drawn — once — so the page
+    // keeps its look without anything moving.
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     /* ---- canvas sizing (height read from #progress-track, like the TEA template) ---- */
     var cw = 0, ch = 0, dpr = 1;
@@ -442,6 +446,16 @@
     var running = false;
     function loop(t) { if (!running) return; draw(t); requestAnimationFrame(loop); }
 
+    // The ambient loop is the page's only permanent CPU/GPU cost. Under reduced
+    // motion it is never started at all — the scene is painted once, so the
+    // hero still looks like the hero, it just holds still.
+    function startScene() {
+      if (reduced) { setP(0.32); draw(0); return; }
+      if (running) return;
+      running = true;
+      requestAnimationFrame(loop);
+    }
+
     /* ---- word splitting for overlays ---- */
     function splitWords() {
       var nodes = document.querySelectorAll('[data-split]');
@@ -463,10 +477,16 @@
        running and the collection + newsletter sit at their natural visible
        state — instead of being stranded behind the loader. */
     function staticReveal() {
-      var title = document.querySelector('#ov1 .title-text');
-      if (title) { title.style.opacity = '1'; title.style.transform = 'none'; }
-      var brand = document.getElementById('ovBrand');
-      if (brand) brand.style.opacity = '1';
+      // body.no-motion carries the stylesheet's static-hero layout, which puts
+      // the four overlay groups back into normal flow. Without it, revealing
+      // them all would stack them on top of each other at their four anchors.
+      document.body.classList.add('no-motion');
+      var hidden = document.querySelectorAll('#ov1 .title-text, .overlay, .word, #ovBrand');
+      Array.prototype.forEach.call(hidden, function (el) {
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
+        el.style.transform = 'none';
+      });
     }
 
     /* ---- scroll-driven timeline ---- */
@@ -474,6 +494,10 @@
       // No animation engine (blocked/slow CDN) → reveal a static hero instead
       // of throwing, which would otherwise leave the page stuck on the loader.
       if (!window.gsap || !window.ScrollTrigger) { staticReveal(); return; }
+      // A hero pinned across several screen-heights and scrubbed by the wheel
+      // is precisely the motion WCAG 2.3.3 asks us not to force on people, so
+      // this path opts out of the timeline entirely rather than shortening it.
+      if (reduced) { staticReveal(); return; }
       gsap.registerPlugin(ScrollTrigger);
       ScrollTrigger.config({ ignoreMobileResize: true });
 
@@ -545,8 +569,7 @@
       sizeCanvas();
       buildScene();
       splitWords();
-      running = true;
-      requestAnimationFrame(loop);
+      startScene();
 
       var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
 
@@ -563,6 +586,7 @@
         loaderFill.style.width = '100%';
         sizeCanvas();
         buildScene();
+        startScene();
         // Never let a scroll-setup failure trap the page behind the loader.
         try { buildScroll(); } catch (e) { staticReveal(); }
         loader.classList.add('hidden');
@@ -582,7 +606,7 @@
       lastW = window.innerWidth;
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function () {
-        sizeCanvas(); buildScene();
+        sizeCanvas(); buildScene(); startScene();
         if (window.ScrollTrigger) ScrollTrigger.refresh();
       }, 160);
     });
@@ -611,16 +635,52 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  /* ---- context-safe serialisers -------------------------------------------
+     The generated page is a single HTML string built from config the caller
+     controls (and, via /api/site, straight from a URL query string). Each of
+     the non-HTML contexts below needs its own escaping — HTML-escaping is
+     either wrong or not enough for them. */
+
   // jsonForScript serialises a value for safe embedding inside an inline
   // <script> tag. JSON.stringify alone is NOT safe there: a value containing
   // "</script>" (e.g. a user-supplied brand) would close the tag early and
   // allow HTML/script injection. Escaping "<" (and the JS line separators
   // U+2028/U+2029) neutralises that while keeping valid, equivalent JSON.
+  // ">" is escaped too, so the same helper is safe in the other embedded
+  // context this file now has: the application/ld+json block.
   function jsonForScript(value) {
     return JSON.stringify(value)
       .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
       .replace(/\u2028/g, '\\u2028')
       .replace(/\u2029/g, '\\u2029');
+  }
+
+  // A colour interpolated raw into CSS. Anything but a plain hex literal could
+  // close the declaration and inject rules (hiding content, or an url() that
+  // phones home), so unknown input falls back instead of being escaped.
+  function safeColor(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : fallback;
+  }
+
+  // Canonical / og:image must be absolute to be usable by a crawler or a chat
+  // app unfurling the link, so anything relative or malformed is dropped
+  // rather than emitted as a broken tag.
+  function absUrl(v) {
+    var s = String(v == null ? '' : v).trim();
+    return /^https?:\/\/[^\s"'<>]+$/i.test(s) ? s : '';
+  }
+
+  // A URL going into href=. esc() stops it breaking the attribute, but not a
+  // `javascript:` payload that runs on click, so the scheme is allow-listed.
+  function safeHref(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return '#top';
+    if (/^(?:https?:|mailto:|tel:)/i.test(s)) return s;
+    if (/^[#/]/.test(s)) return s;          // fragment or root-relative
+    if (/^[\w./-]+$/.test(s)) return s;     // plain relative path
+    return '#top';
   }
 
   // beats for overlay groups (in/out in timeline units 0..100)
@@ -685,6 +745,24 @@
     var fontDisplay = rtl ? "'Vazirmatn', sans-serif" : "'Cormorant Garamond', Georgia, serif";
     var dir = rtl ? 'rtl' : 'ltr';
     var pad = rtl ? 'padding-left' : 'padding-right';
+
+    // Persian/Arabic letterforms are CURSIVE — they join to their neighbours.
+    // CSS letter-spacing forces those joins apart, so Persian text set with the
+    // wide "cinematic" tracking renders as disconnected, broken-looking letters.
+    // Latin keeps the wide tracking (it is the whole look); RTL gets none.
+    //   track(.28)  -> 'letter-spacing:.28em;padding-right:.28em;'  (en)
+    //               -> ''                                           (fa)
+    // The trailing pad offsets the phantom space letter-spacing adds after the
+    // last glyph, so it is only needed when tracking is actually applied.
+    function track(em) {
+      if (rtl) return '';
+      return 'letter-spacing:' + em + 'em;' + pad + ':' + em + 'em;';
+    }
+    // Tracking with no pad compensation (inline/short labels).
+    function trackOnly(em) {
+      return rtl ? '' : 'letter-spacing:' + em + 'em;';
+    }
+
     return [
 '*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}',
 ':root{--bg:' + bg + ';--accent:' + accent + ';--ease:cubic-bezier(0.16,1,0.3,1)}',
@@ -701,14 +779,14 @@
 /* loader */
 '#loader{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s ease}',
 '#loader.hidden{opacity:0;pointer-events:none}',
-'.loader-title{font-family:' + fontDisplay + ';font-size:clamp(26px,7vw,48px);font-weight:600;color:var(--accent);letter-spacing:.18em;' + pad + ':.18em}',
+'.loader-title{font-family:' + fontDisplay + ';font-size:clamp(26px,7vw,48px);font-weight:600;color:var(--accent);' + track(0.18) + '}',
 '.loader-bar-track{width:200px;height:2px;margin-top:32px;background:' + rgba(accent, 0.15) + ';border-radius:2px;overflow:hidden}',
 '.loader-bar-fill{width:0%;height:100%;background:var(--accent);transition:width .25s ease}',
-'.loader-note{margin-top:18px;font-size:11px;font-weight:300;letter-spacing:.14em;color:rgba(255,255,255,.3)}',
+'.loader-note{margin-top:18px;font-size:11px;font-weight:300;' + trackOnly(0.14) + 'color:rgba(255,255,255,.3)}',
 /* header */
 '#site-header{position:fixed;top:0;left:0;right:0;height:64px;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 34px}',
-'.header-brand{font-family:' + fontDisplay + ';font-size:16px;font-weight:600;color:var(--accent);letter-spacing:.22em;' + pad + ':.22em;text-shadow:0 2px 24px rgba(0,0,0,.8);text-decoration:none}',
-'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;letter-spacing:.18em;color:rgba(255,255,255,.6);text-decoration:none;cursor:pointer;transition:color .35s var(--ease);text-shadow:0 2px 24px rgba(0,0,0,.8)}',
+'.header-brand{font-family:' + fontDisplay + ';font-size:16px;font-weight:600;color:var(--accent);' + track(0.22) + 'text-shadow:0 2px 24px rgba(0,0,0,.8);text-decoration:none}',
+'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;' + trackOnly(0.18) + 'color:rgba(255,255,255,.6);text-decoration:none;cursor:pointer;transition:color .35s var(--ease);text-shadow:0 2px 24px rgba(0,0,0,.8)}',
 /* progress */
 '#progress-track{position:fixed;top:0;right:0;width:2px;height:100vh;height:100lvh;z-index:100;background:' + rgba(accent, 0.15) + '}',
 '#progress-fill{width:100%;height:100%;background:' + rgba(accent, 0.8) + ';transform:scaleY(0);transform-origin:top}',
@@ -721,15 +799,15 @@
 '.ov3{right:8%;top:50%;transform:translateY(-50%);text-align:right}',
 '.ov4{left:8%;top:50%;transform:translateY(-50%);text-align:left}',
 '.ov5{left:8%;top:16%;text-align:left}',
-'.title-text{display:inline-block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(40px,9vw,118px);letter-spacing:.28em;' + pad + ':.28em;white-space:nowrap;color:' + rgba(accent, 0.92) + ';text-shadow:0 2px 50px rgba(0,0,0,.9);opacity:0}',
+'.title-text{display:inline-block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(40px,9vw,118px);' + track(0.28) + 'white-space:nowrap;color:' + rgba(accent, 0.92) + ';text-shadow:0 2px 50px rgba(0,0,0,.9);opacity:0}',
 '.oline{display:block;white-space:nowrap;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-weight:' + (rtl ? '500' : '500') + ';font-size:clamp(23px,4.5vw,42px);color:rgba(255,255,255,.9);text-shadow:0 2px 30px rgba(0,0,0,.95),0 0 70px rgba(0,0,0,.8)}',
 '.word{display:inline-block;opacity:0}',
 '.brand-mark{position:absolute;z-index:2;left:50%;top:83%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}',
-'.brand-word{display:block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5.4vw,72px);letter-spacing:.14em;' + pad + ':.14em;white-space:nowrap;color:' + rgba(accent, 0.95) + ';text-shadow:0 2px 50px rgba(0,0,0,.9)}',
+'.brand-word{display:block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5.4vw,72px);' + track(0.14) + 'white-space:nowrap;color:' + rgba(accent, 0.95) + ';text-shadow:0 2px 50px rgba(0,0,0,.9)}',
 /* collection */
 '.collection{position:relative;padding:150px 34px 170px;background:radial-gradient(ellipse 62% 46% at 50% 0%,' + rgba(accent, 0.06) + ',transparent 72%),var(--bg)}',
 '.collection-head{text-align:center;margin-bottom:78px}',
-'.collection-eyebrow{display:block;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.4em;' + pad + ':.4em;color:var(--accent)}',
+'.collection-eyebrow{display:block;font-size:10px;font-weight:500;text-transform:uppercase;' + track(0.4) + 'color:var(--accent)}',
 '.collection-title{margin-top:16px;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5vw,46px);color:#fff}',
 '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:26px;max-width:1120px;margin:0 auto}',
 '.card{position:relative;display:flex;flex-direction:column;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px ' + rgba(accent, 0.3) + ',0 24px 50px -34px rgba(0,0,0,.9);transition:transform .4s var(--ease),box-shadow .4s var(--ease)}',
@@ -738,39 +816,86 @@
 '.card-media-gen::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 25%,' + rgba(accent, 0.22) + ',transparent 60%)}',
 '.card-glyph{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(60px,9vw,104px);color:' + rgba(accent, 0.5) + ';position:relative;z-index:1;text-shadow:0 4px 40px rgba(0,0,0,.5)}',
 '.card-body{display:flex;flex-direction:column;flex:1;padding:32px 34px 34px;text-align:' + (rtl ? 'right' : 'left') + '}',
-'.card-name{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(28px,3.4vw,38px);letter-spacing:' + (rtl ? '.04em' : '.14em') + ';color:var(--accent)}',
+'.card-name{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(28px,3.4vw,38px);' + trackOnly(0.14) + 'color:var(--accent)}',
 '.card-blend{margin-top:4px;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-size:16px;color:rgba(255,255,255,.5)}',
 '.card-ingredients{margin-top:22px;font-size:13px;font-weight:300;line-height:1.7;color:rgba(255,255,255,.6)}',
 '.card-foot{margin-top:auto;padding-top:34px}',
 '.card-price-row{display:flex;align-items:center;justify-content:space-between;gap:16px;direction:' + dir + '}',
 '.card-price{font-family:' + fontDisplay + ';font-weight:500;font-size:clamp(22px,3vw,30px);color:#fff}',
-'.card-btn{font-family:' + fontBody + ';font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);background:transparent;border:1px solid ' + rgba(accent, 0.45) + ';border-radius:6px;padding:12px 16px;cursor:pointer;white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease)}',
-'.card-meta{display:block;margin-top:22px;font-size:10px;font-weight:400;letter-spacing:.12em;color:rgba(255,255,255,.3)}',
-'.card-badge{position:absolute;top:20px;' + (rtl ? 'left' : 'right') + ':20px;z-index:3;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);border:1px solid ' + rgba(accent, 0.4) + ';border-radius:100px;padding:5px 10px;background:' + rgba(bg, 0.5) + '}',
+'.card-btn{font-family:' + fontBody + ';font-size:10px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);background:transparent;border:1px solid ' + rgba(accent, 0.45) + ';border-radius:6px;padding:12px 16px;cursor:pointer;white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease)}',
+'.card-meta{display:block;margin-top:22px;font-size:10px;font-weight:400;' + trackOnly(0.12) + 'color:rgba(255,255,255,.3)}',
+'.card-badge{position:absolute;top:20px;' + (rtl ? 'left' : 'right') + ':20px;z-index:3;font-size:9px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);border:1px solid ' + rgba(accent, 0.4) + ';border-radius:100px;padding:5px 10px;background:' + rgba(bg, 0.5) + '}',
 /* newsletter */
 '.newsletter{position:relative;padding:168px 34px;text-align:center;background:radial-gradient(ellipse 80% 60% at 50% 50%,' + rgba(accent, 0.08) + ',transparent 70%),linear-gradient(to bottom,' + rgba(bg, 0.4) + ',var(--bg))}',
 '.newsletter-title{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(34px,6vw,52px);color:#fff}',
-'.newsletter-sub{margin-top:16px;font-size:13px;font-weight:300;letter-spacing:.05em;color:rgba(255,255,255,.45)}',
+'.newsletter-sub{margin-top:16px;font-size:13px;font-weight:300;' + trackOnly(0.05) + 'color:rgba(255,255,255,.45)}',
 '.newsletter-form{margin-top:44px;display:inline-flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;direction:' + dir + '}',
 '.newsletter-input{width:min(320px,78vw);padding:12px 4px;font-family:' + fontBody + ';font-size:13px;color:#fff;background:transparent;border:none;border-bottom:1px solid ' + rgba(accent, 0.55) + ';outline:none;transition:border-color .35s var(--ease);text-align:' + (rtl ? 'right' : 'left') + '}',
 '.newsletter-input::placeholder{color:rgba(255,255,255,.3)}',
 '.newsletter-input:focus{border-bottom-color:var(--accent)}',
-'.newsletter-btn{font-family:' + fontBody + ';font-size:12px;font-weight:500;letter-spacing:.14em;color:var(--accent);background:transparent;border:none;cursor:pointer;padding:8px 2px;transition:opacity .3s ease}',
+'.newsletter-btn{font-family:' + fontBody + ';font-size:12px;font-weight:500;' + trackOnly(0.14) + 'color:var(--accent);background:transparent;border:none;cursor:pointer;padding:8px 2px;transition:opacity .3s ease}',
 '.newsletter-btn span{border-bottom:1px solid transparent;transition:border-color .3s ease}',
 /* footer */
 '.site-footer{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:42px 34px;background:var(--bg);border-top:1px solid ' + rgba(accent, 0.15) + '}',
-'.footer-brand{font-family:' + fontDisplay + ';font-size:18px;font-weight:600;letter-spacing:.18em;' + pad + ':.18em;color:var(--accent)}',
-'.footer-center{font-size:11px;font-weight:300;letter-spacing:.04em;color:rgba(255,255,255,.3)}',
+'.footer-brand{font-family:' + fontDisplay + ';font-size:18px;font-weight:600;' + track(0.18) + 'color:var(--accent)}',
+'.footer-center{font-size:11px;font-weight:300;' + trackOnly(0.04) + 'color:rgba(255,255,255,.3)}',
 '.footer-links{font-size:11px;color:rgba(255,255,255,.5)}',
 '.footer-links a{color:inherit;text-decoration:none;transition:color .3s ease}',
 /* responsive */
 '@media (max-width:768px){#site-header{padding:0 20px}.collection{padding:110px 22px 120px}.newsletter{padding:120px 22px}.overlay{max-width:84%}.ov2{left:7%;bottom:12%}.ov3{right:7%}.ov4{left:7%}.ov5{left:7%}}',
-'@media (max-width:600px){.title-text{letter-spacing:.14em;' + pad + ':.14em}.oline{white-space:normal}.card-body{padding:26px 24px 30px}.card-price-row{flex-direction:column;align-items:stretch}.card-btn{padding:16px}.newsletter-btn{padding:14px 10px}.header-brand,.header-shop{display:inline-flex;align-items:center;min-height:44px}}',
+'@media (max-width:600px){' + (rtl ? '' : '.title-text{' + track(0.14) + '}') + '.oline{white-space:normal}.card-body{padding:26px 24px 30px}.card-price-row{flex-direction:column;align-items:stretch}.card-btn{padding:16px}.newsletter-btn{padding:14px 10px}.header-brand,.header-shop{display:inline-flex;align-items:center;min-height:44px}}',
 '@media (max-width:680px){.site-footer{flex-direction:column;text-align:center;gap:16px}}',
 '@media (max-width:480px){#site-header{height:56px}}',
 '@media (max-width:400px){.overlay{max-width:90%}.ov2,.ov4,.ov5{left:5%}.ov3{right:5%}}',
-'@media (hover:hover){.card:hover{transform:translateY(-12px);box-shadow:0 0 0 1px ' + rgba(accent, 0.6) + ',0 36px 64px -28px rgba(0,0,0,.9),0 0 60px -14px ' + rgba(accent, 0.28) + '}.card:hover .card-media{transform:scale(1.045)}.header-shop:hover{color:var(--accent)}.card-btn:hover{background:var(--accent);border-color:var(--accent);color:#100c06}.newsletter-btn:hover span{border-bottom-color:var(--accent)}.footer-links a:hover{text-decoration:underline;color:var(--accent)}}'
+'@media (hover:hover){.card:hover{transform:translateY(-12px);box-shadow:0 0 0 1px ' + rgba(accent, 0.6) + ',0 36px 64px -28px rgba(0,0,0,.9),0 0 60px -14px ' + rgba(accent, 0.28) + '}.card:hover .card-media{transform:scale(1.045)}.header-shop:hover{color:var(--accent)}.card-btn:hover{background:var(--accent);border-color:var(--accent);color:#100c06}.newsletter-btn:hover span{border-bottom-color:var(--accent)}.footer-links a:hover{text-decoration:underline;color:var(--accent)}}',
+/* keyboard accessibility — the design relies on hover, so without these a
+   keyboard user has no idea where they are on the page */
+'.skip-link{position:absolute;top:-120px;' + (rtl ? 'right' : 'left') + ':16px;z-index:1100;background:var(--accent);color:' + bg + ';font-family:' + fontBody + ';font-size:13px;font-weight:600;padding:12px 20px;border-radius:0 0 8px 8px;text-decoration:none;transition:top .2s ease}',
+'.skip-link:focus{top:0}',
+'.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
+'a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}',
+/* Applied by the engine when it gives up on the scroll timeline (a blocked or
+   slow CDN leaves GSAP undefined). Without it the overlay copy would be
+   revealed but still absolutely positioned at four different anchors, i.e.
+   stacked on top of itself. */
+staticHeroCss(rtl, 'body.no-motion '),
+/* reduced motion — a pinned hero scrubbed across several screen-heights is
+   exactly the motion WCAG 2.3.3 asks us to drop. Freezing it mid-story would
+   strand the copy, so instead the hero becomes a static poster: natural
+   height, every line in normal flow and visible, no pin, no scrub, no
+   ambient canvas loop (the engine also stops animating — see engineSource). */
+'@media (prefers-reduced-motion:reduce){',
+'*,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}',
+staticHeroCss(rtl),
+'}'
     ].join('\n');
+  }
+
+  /* The shared "no motion" hero layout. Used twice, for the two ways a visitor
+     can end up without the scroll animation: they asked for reduced motion, or
+     they have no JavaScript at all (see the <noscript> block in generate()).
+     In both cases the page must still read as a finished site, not a frozen
+     one — so the absolutely-positioned overlay copy returns to normal flow and
+     everything the timeline would have faded in starts visible. */
+  function staticHeroCss(rtl, prefix) {
+    var p = prefix || '';
+    // Each selector in a group needs its own prefix — "body.no-motion .a,.b"
+    // would only scope the first one.
+    function rule(selectors, decls) {
+      return selectors.map(function (s) { return p + s; }).join(',') + '{' + decls + '}';
+    }
+    return [
+      rule(['.hero'], 'height:auto;min-height:auto;display:flex;flex-direction:column;justify-content:center;gap:24px;padding:132px 34px 104px'),
+      rule(['.overlay'], 'position:static;transform:none;max-width:100%;opacity:1 !important;visibility:visible !important;text-align:' + (rtl ? 'right' : 'left')),
+      rule(['.ov1'], 'text-align:center'),
+      rule(['.title-text', '.word', '.brand-word', '.oline'], 'opacity:1 !important;transform:none !important'),
+      rule(['.title-text'], 'white-space:normal'),
+      rule(['.brand-mark'], 'position:static;transform:none;text-align:center;order:-1'),
+      rule(['.card', '.nl-reveal'], 'opacity:1 !important;transform:none !important'),
+      // the rail tracks progress through a scroll story that no longer exists
+      // here, so a permanently empty (or full) bar would just mislead
+      rule(['#progress-track'], 'display:none')
+    ].join('');
   }
 
   /* ============================================================
@@ -780,8 +905,10 @@
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
-    var accent = cfg.accent || preset.accent;
-    var bg = cfg.bg || preset.bg;
+    // Colours land in raw CSS, so they are validated (not escaped) here — at
+    // the one place every path funnels through — rather than at each use site.
+    var accent = safeColor(cfg.accent, preset.accent);
+    var bg = safeColor(cfg.bg, preset.bg);
     var brand = cfg.brand || preset.label;
 
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
@@ -814,7 +941,11 @@
       footerLinks: Array.isArray(cfg.footerLinks) ? cfg.footerLinks : (lang === 'en'
         ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
         : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
-      year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵')
+      year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵'),
+      // Optional, and only ever absolute: an empty value means the tag is
+      // omitted rather than emitted pointing at nothing.
+      url: absUrl(cfg.url),
+      ogImage: absUrl(cfg.ogImage) || absUrl(items[0] && items[0].image)
     };
   }
 
@@ -845,7 +976,7 @@
     }).join('\n    ');
 
     var footerLinksHtml = (c.footerLinks || []).map(function (l) {
-      return '<a href="' + esc(l.href || '#top') + '">' + esc(l.label) + '</a>';
+      return '<a href="' + esc(safeHref(l.href)) + '">' + esc(l.label) + '</a>';
     }).join(' · ');
 
     // fonts
@@ -876,6 +1007,60 @@
 
     var engine = '(' + engineSource.toString() + ')();';
 
+    /* --- social preview + structured data ---------------------------------
+       A generated site is meant to be shared (Instagram bio, Telegram, a
+       WhatsApp link). Without these the unfurl is a bare URL. og:url/og:image
+       and canonical are emitted only when the caller supplied a real absolute
+       URL, so nothing ever points at a page that does not exist. */
+    var socialMeta =
+      '<meta property="og:type" content="website" />\n' +
+      '<meta property="og:site_name" content="' + esc(c.brand) + '" />\n' +
+      '<meta property="og:title" content="' + esc(c.title) + '" />\n' +
+      '<meta property="og:description" content="' + esc(c.description) + '" />\n' +
+      '<meta property="og:locale" content="' + (rtl ? 'fa_IR' : 'en_US') + '" />\n' +
+      (c.url ? '<meta property="og:url" content="' + esc(c.url) + '" />\n' : '') +
+      (c.ogImage ? '<meta property="og:image" content="' + esc(c.ogImage) + '" />\n' : '') +
+      '<meta name="twitter:card" content="' + (c.ogImage ? 'summary_large_image' : 'summary') + '" />\n' +
+      '<meta name="twitter:title" content="' + esc(c.title) + '" />\n' +
+      '<meta name="twitter:description" content="' + esc(c.description) + '" />\n' +
+      (c.ogImage ? '<meta name="twitter:image" content="' + esc(c.ogImage) + '" />\n' : '') +
+      (c.url ? '<link rel="canonical" href="' + esc(c.url) + '" />\n' : '');
+
+    var ld = {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: c.brand,
+      description: c.description
+    };
+    if (c.url) ld.url = c.url;
+    if (c.ogImage) ld.image = c.ogImage;
+    if ((c.items || []).length) {
+      ld.makesOffer = c.items.slice(0, 3).map(function (it) {
+        return {
+          '@type': 'Offer',
+          itemOffered: {
+            '@type': 'Product',
+            name: String(it.name == null ? '' : it.name),
+            description: String(it.desc || it.blend || '')
+          }
+        };
+      });
+    }
+    var jsonLd = '<script type="application/ld+json">' + jsonForScript(ld) + '</scr' + 'ipt>\n';
+
+    /* --- the no-JavaScript path -------------------------------------------
+       The loader is only ever dismissed by script, and body.loading pins the
+       page at 100vh with overflow hidden. With JavaScript off that combination
+       leaves a permanently blank loading screen — the whole site, unreachable.
+       This block hands those visitors the same static poster that reduced
+       motion gets, using nothing but CSS. */
+    var noscriptCss =
+      '<noscript><style>' +
+      '#loader{display:none !important}' +
+      'body.loading{overflow:auto !important;height:auto !important}' +
+      staticHeroCss(rtl) +
+      '</style></noscript>\n';
+
     var html =
 '<!DOCTYPE html>\n' +
 '<html lang="' + (rtl ? 'fa' : 'en') + '" dir="' + (rtl ? 'rtl' : 'ltr') + '">\n' +
@@ -886,10 +1071,14 @@
 '<meta name="description" content="' + esc(c.description) + '" />\n' +
 '<meta name="theme-color" content="' + esc(bg) + '" />\n' +
 '<link rel="icon" href="' + favicon(accent, bg) + '" />\n' +
+socialMeta +
 fontLinks + '\n' +
 '<style>\n' + baseCss(c.theme, lang) + '\n</style>\n' +
+noscriptCss +
+jsonLd +
 '</head>\n' +
 '<body class="loading">\n\n' +
+'<a class="skip-link" href="#collection">' + esc(lang === 'en' ? 'Skip to content' : 'رفتن به محتوا') + '</a>\n\n' +
 '<!-- loading -->\n' +
 '<div id="loader">\n' +
 '  <div class="loader-title">' + esc(c.brand) + '</div>\n' +
@@ -903,11 +1092,18 @@ fontLinks + '\n' +
 '</header>\n\n' +
 '<!-- progress -->\n' +
 '<div id="progress-track"><div id="progress-fill"></div></div>\n\n' +
+'<main id="main">\n\n' +
 '<!-- hero -->\n' +
 '<section class="hero" id="top">\n' +
 '  <canvas id="hero-canvas" aria-hidden="true"></canvas>\n' +
 '  <div class="brand-mark" id="ovBrand"><span class="brand-word">' + esc(c.brand) + '</span></div>\n' +
-'  <div class="overlay ov1" id="ov1"><span class="title-text">' + esc(c.heroTitle) + '</span></div>\n' +
+/* The hero word is the page's one true heading. It used to be a <div>, which
+   left every generated site with no <h1> at all — bad for search results and
+   for anyone navigating by headings. The visible word stays exactly as it was;
+   the brand is appended for screen readers only, so the heading reads as
+   "<word> — <brand>" instead of a bare, context-free noun. */
+'  <h1 class="overlay ov1" id="ov1"><span class="title-text">' + esc(c.heroTitle) + '</span>' +
+'<span class="sr-only"> — ' + esc(c.brand) + '</span></h1>\n' +
 '  ' + overlaysHtml + '\n' +
 '</section>\n\n' +
 '<!-- collection -->\n' +
@@ -927,6 +1123,7 @@ fontLinks + '\n' +
 '    <button class="newsletter-btn" type="submit"><span>' + esc(c.newsletterCta) + '</span></button>\n' +
 '  </form>\n' +
 '</section>\n\n' +
+'</main>\n\n' +
 '<!-- footer -->\n' +
 '<footer class="site-footer">\n' +
 '  <span class="footer-brand">' + esc(c.brand) + '</span>\n' +

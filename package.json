@@ -4,7 +4,9 @@
   "description": "A panel that turns a brand + field of work into a cinematic scroll-driven website",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test",
+    "check": "node --check server.js && node --check public/generator.js && node --check public/app.js"
   },
   "keywords": [],
   "author": "",
