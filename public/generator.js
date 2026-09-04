@@ -914,7 +914,12 @@ staticHeroCss(rtl),
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
     // these) — fall back to the preset so generate() never throws on .map/.slice.
     var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
-    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
+    // Also drop non-object entries (a null or a bare string an LLM might emit):
+    // buildCard() and the JSON-LD makesOffer map both read item.image/item.name,
+    // which throws on null. Filtering here keeps generate() crash-proof.
+    var items = Array.isArray(cfg.items)
+      ? cfg.items.filter(function (it) { return it && typeof it === 'object'; })
+      : preset.items;
 
     return {
       brand: brand,
