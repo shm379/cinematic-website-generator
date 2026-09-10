@@ -171,8 +171,13 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   // 3) keyless heuristic — always works.
   if (!config) config = CWG.parsePrompt(prompt);
   try {
+    // generate() normalises its input via withDefaults() internally, so it must
+    // receive the RAW config (top-level accent/bg/motif). Passing the already-
+    // normalised `full` (whose colours live under .theme) would make those reads
+    // miss and silently fall back to the field preset — emitting HTML that
+    // disagrees with the `config` we return. Render from `config` instead.
     const full = CWG.withDefaults(config);
-    res.json({ via: via, config: full, html: CWG.generate(full) });
+    res.json({ via: via, config: full, html: CWG.generate(config) });
   } catch (err) {
     res.status(400).json({ error: String(err && err.message ? err.message : err) });
   }
