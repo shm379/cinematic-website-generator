@@ -456,6 +456,25 @@
       requestAnimationFrame(loop);
     }
 
+    /* ---- card photos: skeleton until decoded ----
+       Marks each media wrapper .is-loaded so the shimmer stops and the photo
+       cross-fades in. An image that errors counts as settled too: a broken or
+       blocked photo must not leave a card shimmering for ever. The timeout is
+       the same idea for a request that simply hangs. */
+    function wireMedia() {
+      var wraps = document.querySelectorAll('.card-media-wrap');
+      Array.prototype.forEach.call(wraps, function (w) {
+        var img = w.querySelector('img.card-media');
+        if (!img) { w.classList.add('is-loaded'); return; }
+        function settle() { w.classList.add('is-loaded'); }
+        // cached images can already be decoded before this runs
+        if (img.complete && img.naturalWidth > 0) { settle(); return; }
+        img.addEventListener('load', settle);
+        img.addEventListener('error', settle);
+        setTimeout(settle, 8000);
+      });
+    }
+
     /* ---- word splitting for overlays ---- */
     function splitWords() {
       var nodes = document.querySelectorAll('[data-split]');
@@ -569,6 +588,7 @@
       sizeCanvas();
       buildScene();
       splitWords();
+      wireMedia();
       startScene();
 
       var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
@@ -705,7 +725,14 @@
   function buildCard(item, accent, idx, lang) {
     var media;
     if (item.image) {
-      media = '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />';
+      // The photo is the one thing on the page that arrives over the network
+      // after paint, so it gets a skeleton: the wrapper holds the card's shape
+      // and shimmers until the image decodes, then the engine adds .is-loaded
+      // and the photo cross-fades in. Without JS the image is simply visible
+      // (the opacity rule is gated on html.js), so nothing depends on this.
+      media = '<div class="card-media-wrap">' +
+        '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />' +
+        '</div>';
     } else {
       var initial = (item.name || '').trim().charAt(0) || '✦';
       media = '<div class="card-media card-media-gen" style="background:' + cardMediaStyle(accent, idx) + '">' +
@@ -786,7 +813,7 @@
 /* header */
 '#site-header{position:fixed;top:0;left:0;right:0;height:64px;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 34px}',
 '.header-brand{font-family:' + fontDisplay + ';font-size:16px;font-weight:600;color:var(--accent);' + track(0.22) + 'text-shadow:0 2px 24px rgba(0,0,0,.8);text-decoration:none}',
-'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;' + trackOnly(0.18) + 'color:rgba(255,255,255,.6);text-decoration:none;cursor:pointer;transition:color .35s var(--ease);text-shadow:0 2px 24px rgba(0,0,0,.8)}',
+'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;' + trackOnly(0.18) + 'color:rgba(255,255,255,.6);text-decoration:none;cursor:pointer;transition:color .35s var(--ease),transform .18s var(--ease);display:inline-block;text-shadow:0 2px 24px rgba(0,0,0,.8)}',
 /* progress */
 '#progress-track{position:fixed;top:0;right:0;width:2px;height:100vh;height:100lvh;z-index:100;background:' + rgba(accent, 0.15) + '}',
 '#progress-fill{width:100%;height:100%;background:' + rgba(accent, 0.8) + ';transform:scaleY(0);transform-origin:top}',
@@ -822,9 +849,36 @@
 '.card-foot{margin-top:auto;padding-top:34px}',
 '.card-price-row{display:flex;align-items:center;justify-content:space-between;gap:16px;direction:' + dir + '}',
 '.card-price{font-family:' + fontDisplay + ';font-weight:500;font-size:clamp(22px,3vw,30px);color:#fff}',
-'.card-btn{font-family:' + fontBody + ';font-size:10px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);background:transparent;border:1px solid ' + rgba(accent, 0.45) + ';border-radius:6px;padding:12px 16px;cursor:pointer;white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease)}',
+'.card-btn{font-family:' + fontBody + ';font-size:10px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);background:transparent;border:1px solid ' + rgba(accent, 0.45) + ';border-radius:6px;padding:12px 16px;cursor:pointer;white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease),transform .18s var(--ease)}',
 '.card-meta{display:block;margin-top:22px;font-size:10px;font-weight:400;' + trackOnly(0.12) + 'color:rgba(255,255,255,.3)}',
 '.card-badge{position:absolute;top:20px;' + (rtl ? 'left' : 'right') + ':20px;z-index:3;font-size:9px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);border:1px solid ' + rgba(accent, 0.4) + ';border-radius:100px;padding:5px 10px;background:' + rgba(bg, 0.5) + '}',
+/* --- skeleton + shimmer for card photos -------------------------------
+   The photo is the only thing on the page that arrives after paint. The
+   wrapper reserves its exact 16/9 box so nothing reflows when it lands,
+   and sweeps a highlight across the placeholder until it does. */
+'.card-media-wrap{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:' + rgba(accent, 0.07) + '}',
+'.card-media-wrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 22%,' + rgba(accent, 0.13) + ' 42%,rgba(255,255,255,.07) 50%,' + rgba(accent, 0.13) + ' 58%,transparent 78%);background-size:260% 100%;animation:cwg-shimmer 1.5s linear infinite;transition:opacity .45s ease}',
+'.card-media-wrap .card-media{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}',
+/* Gated on html.js (set by a one-liner in <head>, so there is no flash of a
+   hidden image before this rule exists). With JavaScript off the photo is
+   simply visible and the skeleton sits harmlessly behind it. */
+'html.js .card-media-wrap .card-media{opacity:0;transition:opacity .55s var(--ease);animation:cwg-media-failsafe 0s linear 8s forwards}',
+'html.js .card-media-wrap.is-loaded .card-media{opacity:1}',
+'.card-media-wrap.is-loaded::after{opacity:0;animation:none}',
+'@keyframes cwg-shimmer{from{background-position:170% 0}to{background-position:-70% 0}}',
+/* Belt and braces: if the engine never runs at all (a syntax error, a blocked
+   inline script) nothing would ever add .is-loaded, and a hidden photo would
+   be a worse failure than an unpolished one. This reveals it regardless. */
+'@keyframes cwg-media-failsafe{to{opacity:1}}',
+/* the loader bar picks up the same sweep, so the waiting reads as one system */
+'.loader-bar-fill{position:relative;overflow:hidden}',
+'.loader-bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);background-size:220% 100%;animation:cwg-shimmer 1.1s linear infinite}',
+/* --- app-like touch feedback ------------------------------------------
+   touch-action kills the 300ms tap delay; the press-scale gives the
+   physical "it responded" beat a native control has and a web page does not. */
+'button,a,.card{touch-action:manipulation}',
+'.card-btn:active,.newsletter-btn:active,.header-shop:active{transform:scale(.96)}',
+'.card:active{transform:scale(.995)}',
 /* newsletter */
 '.newsletter{position:relative;padding:168px 34px;text-align:center;background:radial-gradient(ellipse 80% 60% at 50% 50%,' + rgba(accent, 0.08) + ',transparent 70%),linear-gradient(to bottom,' + rgba(bg, 0.4) + ',var(--bg))}',
 '.newsletter-title{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(34px,6vw,52px);color:#fff}',
@@ -833,7 +887,7 @@
 '.newsletter-input{width:min(320px,78vw);padding:12px 4px;font-family:' + fontBody + ';font-size:13px;color:#fff;background:transparent;border:none;border-bottom:1px solid ' + rgba(accent, 0.55) + ';outline:none;transition:border-color .35s var(--ease);text-align:' + (rtl ? 'right' : 'left') + '}',
 '.newsletter-input::placeholder{color:rgba(255,255,255,.3)}',
 '.newsletter-input:focus{border-bottom-color:var(--accent)}',
-'.newsletter-btn{font-family:' + fontBody + ';font-size:12px;font-weight:500;' + trackOnly(0.14) + 'color:var(--accent);background:transparent;border:none;cursor:pointer;padding:8px 2px;transition:opacity .3s ease}',
+'.newsletter-btn{font-family:' + fontBody + ';font-size:12px;font-weight:500;' + trackOnly(0.14) + 'color:var(--accent);background:transparent;border:none;cursor:pointer;padding:8px 2px;transition:opacity .3s ease,transform .18s var(--ease)}',
 '.newsletter-btn span{border-bottom:1px solid transparent;transition:border-color .3s ease}',
 /* footer */
 '.site-footer{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:42px 34px;background:var(--bg);border-top:1px solid ' + rgba(accent, 0.15) + '}',
@@ -1073,6 +1127,11 @@ staticHeroCss(rtl),
 '<link rel="icon" href="' + favicon(accent, bg) + '" />\n' +
 socialMeta +
 fontLinks + '\n' +
+/* Marks the document as scripted BEFORE the stylesheet is parsed, so the
+   "hide the photo until it has decoded" rule only ever applies where
+   something will actually reveal it — and never flashes a visible image to
+   hidden, because the class is already set when the rule first matches. */
+'<script>document.documentElement.className+=" js"</scr' + 'ipt>\n' +
 '<style>\n' + baseCss(c.theme, lang) + '\n</style>\n' +
 noscriptCss +
 jsonLd +

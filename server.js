@@ -146,6 +146,50 @@ async function configFromPromptLLM(prompt) {
   return extractJSON(text);
 }
 
+// withTimeout settles with p, or rejects once ms have elapsed, so one slow
+// upstream cannot hold a page-generation request open indefinitely.
+function withTimeout(p, ms, label) {
+  let t;
+  return Promise.race([
+    Promise.resolve(p).finally(() => clearTimeout(t)),
+    new Promise((_, reject) => {
+      t = setTimeout(() => reject(new Error((label || 'operation') + ' timed out after ' + ms + 'ms')), ms);
+    })
+  ]);
+}
+
+// autofillPhotos gives a prompt-built site real photography.
+//
+// The mega-prompt flow hands back a FINISHED page, so without this every card
+// ships the generated initial-glyph placeholder and the result reads as a
+// wireframe rather than a site. It fills only cards the model did not already
+// supply an image for, and is best-effort by design: any failure leaves the
+// placeholders in place, which still render correctly.
+//
+// Returns the source label it used, or null when it changed nothing.
+async function autofillPhotos(full, prompt) {
+  const hasNabuImg = hasNabuImageSource();
+  if (!hasNabuImg && !hasStockSource()) return null;
+  const items = Array.isArray(full.items) ? full.items : [];
+  const missing = items.filter((it) => it && !it.image).length;
+  if (!missing) return null;
+
+  const opts = {
+    field: full.field,
+    brand: full.brand,
+    accent: full.theme && full.theme.accent,
+    prompt: prompt,
+    count: missing
+  };
+  const out = hasNabuImg ? await nabuPhotos(opts) : await pexelsPhotos(opts);
+  const urls = ((out && out.photos) || []).map((p) => p && p.url).filter(Boolean);
+  let used = 0;
+  for (const it of items) {
+    if (it && !it.image && urls[used]) { it.image = urls[used]; used++; }
+  }
+  return used ? ((out && out.source) || 'stock') : null;
+}
+
 app.post('/api/generate-from-prompt', async (req, res) => {
   const prompt = (req.body && req.body.prompt) || '';
   if (!String(prompt).trim()) return res.status(400).json({ error: 'prompt is required' });
@@ -172,7 +216,19 @@ app.post('/api/generate-from-prompt', async (req, res) => {
   if (!config) config = CWG.parsePrompt(prompt);
   try {
     const full = CWG.withDefaults(config);
-    res.json({ via: via, config: full, html: CWG.generate(full) });
+    // Real photography, best effort. Callers that want the placeholders (a
+    // fast preview, or a caller supplying its own art) can pass photos:false.
+    let photos = null;
+    if (req.body && req.body.photos !== false) {
+      try {
+        photos = await withTimeout(autofillPhotos(full, prompt), 12000, 'photo autofill');
+      } catch (err) {
+        // the page is already complete without them — never fail on this
+        console.warn('photo autofill skipped:', err && err.message);
+      }
+    }
+    // generate AFTER the fill so the photos are in the returned HTML
+    res.json({ via: via, photos: photos, config: full, html: CWG.generate(full) });
   } catch (err) {
     res.status(400).json({ error: String(err && err.message ? err.message : err) });
   }
