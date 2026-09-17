@@ -112,6 +112,63 @@ test('losing the animation CDN still yields a laid-out page', () => {
 });
 
 /* ============================================================
+   Card photos: skeleton, shimmer, and never getting stuck
+   ============================================================ */
+const WITH_PHOTOS = {
+  items: [
+    { name: 'A', price: '1', image: 'https://cdn.example/a.jpg' },
+    { name: 'B', price: '2', image: 'https://cdn.example/b.jpg' },
+    { name: 'C', price: '3' } // no photo — keeps the generated glyph
+  ]
+};
+
+test('a card with a photo gets a shimmering skeleton, one without does not', () => {
+  const html = gen(WITH_PHOTOS);
+  assert.equal((html.match(/<div class="card-media-wrap">/g) || []).length, 2);
+  assert.equal((html.match(/<img class="card-media"/g) || []).length, 2);
+  // the third card still uses the generated glyph, which needs no skeleton
+  assert.match(html, /card-media-gen/);
+  assert.match(html, /@keyframes cwg-shimmer\{/);
+});
+
+test('the photo is only hidden where something will reveal it', () => {
+  const html = gen(WITH_PHOTOS);
+  // hiding is gated on html.js, set by a head one-liner before the stylesheet
+  assert.match(html, /<script>document\.documentElement\.className\+=" js"<\/script>/);
+  assert.match(html, /html\.js \.card-media-wrap \.card-media\{opacity:0/);
+  // and the .is-loaded rule must be gated too, or it would lose on specificity
+  // to the html.js rule and the photo would never appear
+  assert.match(html, /html\.js \.card-media-wrap\.is-loaded \.card-media\{opacity:1\}/);
+});
+
+test('a photo that never loads still ends up visible', () => {
+  const html = gen(WITH_PHOTOS);
+  // engine: load, error and a timeout all settle the skeleton
+  assert.match(html, /img\.addEventListener\('load', settle\)/);
+  assert.match(html, /img\.addEventListener\('error', settle\)/);
+  assert.match(html, /setTimeout\(settle, 8000\)/);
+  // and a CSS failsafe covers the engine never running at all
+  assert.match(html, /animation:cwg-media-failsafe 0s linear 8s forwards/);
+  assert.match(html, /@keyframes cwg-media-failsafe\{to\{opacity:1\}\}/);
+});
+
+test('the page gives app-like touch feedback', () => {
+  const html = gen();
+  assert.match(html, /button,a,\.card\{touch-action:manipulation\}/);
+  assert.match(html, /:active\{transform:scale\(\.96\)\}/);
+  // the press has to be transitioned or it snaps rather than responds
+  assert.match(html, /\.card-btn\{[^}]*transform \.18s var\(--ease\)/);
+});
+
+test('reduced motion neutralises the shimmer', () => {
+  const block = gen(WITH_PHOTOS).match(/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\n\}/)[0];
+  // the blanket animation rule covers every keyframe animation on the page,
+  // including the shimmer sweep and the failsafe
+  assert.match(block, /animation-duration:\.001ms !important/);
+  assert.match(block, /animation-iteration-count:1 !important/);
+});
+
+/* ============================================================
    Persian typography
    ============================================================ */
 test('Persian text gets no letter-spacing, Latin keeps its tracking', () => {
