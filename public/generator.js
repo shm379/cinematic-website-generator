@@ -249,6 +249,59 @@
   }
 
   /* ============================================================
+     Themes — the visual register, chosen independently of the field.
+     A field preset decides WHAT the site says (copy, items, motif);
+     a theme decides HOW it looks: palette, foreground, the ambient
+     motif, and the surface treatment of the cards.
+     Every theme is dark on purpose — the hero is a procedural canvas
+     composited in 'lighter' over a near-black wash, so a light
+     background would wash the whole scene out. Variety comes from
+     hue, motif behaviour and surface, not from brightness.
+     ============================================================ */
+  var SURFACES = ['soft', 'sharp', 'glass'];
+
+  var THEMES = {
+    midnight: {
+      label: 'نیمه‌شب', accent: '#f59e0b', bg: '#050505', fg: '#ffffff', surface: 'soft',
+      motif: { shape: 'soft', count: 55, speed: 1.0, size: 1.1, glow: true }
+    },
+    noir: {
+      // editorial monochrome: no colour, hairline rules, hard corners
+      label: 'تک‌رنگ', accent: '#e8e6e1', bg: '#000000', fg: '#ffffff', surface: 'sharp',
+      motif: { shape: 'soft', count: 34, speed: 0.6, size: 1.5, glow: false }
+    },
+    aurora: {
+      label: 'شفق', accent: '#5fd3c4', bg: '#04090c', fg: '#eafdfb', surface: 'glass',
+      motif: { shape: 'spark', count: 78, speed: 1.25, size: 0.85, glow: true }
+    },
+    sunset: {
+      label: 'غروب', accent: '#ff7a59', bg: '#0c0507', fg: '#fff3ee', surface: 'soft',
+      motif: { shape: 'soft', count: 46, speed: 0.85, size: 1.45, glow: true }
+    },
+    royal: {
+      label: 'ارغوانی', accent: '#a78bfa', bg: '#07060f', fg: '#f2eeff', surface: 'glass',
+      motif: { shape: 'spark', count: 70, speed: 1.1, size: 0.9, glow: true }
+    },
+    forest: {
+      label: 'جنگل', accent: '#86c98a', bg: '#040705', fg: '#eef7ee', surface: 'soft',
+      motif: { shape: 'soft', count: 40, speed: 0.65, size: 1.3, glow: true }
+    },
+    ember: {
+      label: 'اخگر', accent: '#e0613e', bg: '#080505', fg: '#fff0ea', surface: 'sharp',
+      motif: { shape: 'spark', count: 86, speed: 1.5, size: 0.8, glow: true }
+    }
+  };
+  THEMES._default = THEMES.midnight;
+
+  function themeFor(name) {
+    return THEMES[name] || THEMES._default;
+  }
+
+  function safeSurface(v, fallback) {
+    return SURFACES.indexOf(String(v)) !== -1 ? String(v) : fallback;
+  }
+
+  /* ============================================================
      The runtime engine — serialised into each generated page.
      Written as a real function (so it is syntax-checked here) and
      injected via .toString(). It reads everything it needs from
@@ -462,17 +515,53 @@
        blocked photo must not leave a card shimmering for ever. The timeout is
        the same idea for a request that simply hangs. */
     function wireMedia() {
-      var wraps = document.querySelectorAll('.card-media-wrap');
-      Array.prototype.forEach.call(wraps, function (w) {
-        var img = w.querySelector('img.card-media');
-        if (!img) { w.classList.add('is-loaded'); return; }
-        function settle() { w.classList.add('is-loaded'); }
+      var cards = document.querySelectorAll('.card.is-loading');
+      Array.prototype.forEach.call(cards, function (card) {
+        var img = card.querySelector('img.card-media');
+        function settle() { card.classList.remove('is-loading'); }
+        if (!img) { settle(); return; }
         // cached images can already be decoded before this runs
-        if (img.complete && img.naturalWidth > 0) { settle(); return; }
+        function fail() { card.classList.add('media-failed'); settle(); }
+        if (img.complete) { (img.naturalWidth > 0 ? settle : fail)(); return; }
         img.addEventListener('load', settle);
-        img.addEventListener('error', settle);
+        img.addEventListener('error', fail);
         setTimeout(settle, 8000);
       });
+    }
+
+    /* ---- staggered entry ----
+       Owned by CSS + IntersectionObserver rather than the animation library,
+       so the collection and newsletter still arrive properly when the GSAP
+       CDN is blocked — which for this audience is a normal Tuesday. */
+    function wireReveal() {
+      var items = document.querySelectorAll('.card,.nl-reveal');
+      if (!items.length) return;
+      function show(el) { el.classList.add('is-in'); }
+
+      Array.prototype.forEach.call(items, function (el) {
+        // Clearing the animation once it has played hands hover back its own
+        // transition; a finished `both` animation would otherwise keep
+        // overriding the transform hover wants to set.
+        el.addEventListener('animationend', function (e) {
+          if (e.animationName === 'cwg-enter') el.classList.add('is-done');
+        });
+      });
+
+      if (!('IntersectionObserver' in window)) {
+        Array.prototype.forEach.call(items, show);
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          show(en.target);
+          io.unobserve(en.target);
+        });
+      }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+      Array.prototype.forEach.call(items, function (el) { io.observe(el); });
+
+      // nothing should be able to strand content at opacity 0
+      setTimeout(function () { Array.prototype.forEach.call(items, show); }, 6000);
     }
 
     /* ---- word splitting for overlays ---- */
@@ -568,17 +657,10 @@
       gsap.fromTo('#progress-fill', { scaleY: 0 },
         { scaleY: 1, ease: 'none', scrollTrigger: { start: 0, end: 'max', scrub: 0.3 } });
 
-      // collection cards reveal
-      gsap.from('.card', {
-        autoAlpha: 0, yPercent: 14, duration: 1, ease: 'power2.out', stagger: 0.14,
-        scrollTrigger: { trigger: '.collection', start: 'top 72%' }
-      });
-
-      // newsletter reveal
-      gsap.from('.nl-reveal', {
-        autoAlpha: 0, y: 28, duration: 1, ease: 'power2.out', stagger: 0.12,
-        scrollTrigger: { trigger: '.newsletter', start: 'top 70%' }
-      });
+      // The collection cards and the newsletter used to be revealed here too.
+      // They are now driven by CSS + IntersectionObserver (see wireReveal) so
+      // they behave identically whether or not GSAP loaded, and so the stagger
+      // is a composited animation rather than a scripted one.
     }
 
     /* ---- boot ---- */
@@ -589,6 +671,7 @@
       buildScene();
       splitWords();
       wireMedia();
+      wireReveal();
       startScene();
 
       var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
@@ -730,7 +813,16 @@
       // and shimmers until the image decodes, then the engine adds .is-loaded
       // and the photo cross-fades in. Without JS the image is simply visible
       // (the opacity rule is gated on html.js), so nothing depends on this.
+      // The glyph panel sits BEHIND the photo as a fallback. A photo that
+      // fails leaves the browser's broken-image icon and the alt text sitting
+      // in the middle of the card; the engine hides the <img> instead and this
+      // takes over, so a dead URL degrades to the same branded panel a card
+      // with no photo would have had.
+      var fbInitial = (item.name || '').trim().charAt(0) || '✦';
       media = '<div class="card-media-wrap">' +
+        '<div class="card-media-fallback" style="background:' + cardMediaStyle(accent, idx) + '" aria-hidden="true">' +
+          '<span class="card-glyph">' + esc(fbInitial) + '</span>' +
+        '</div>' +
         '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />' +
         '</div>';
     } else {
@@ -741,7 +833,9 @@
     var badge = item.badge ? '<span class="card-badge">' + esc(item.badge) + '</span>' : '';
     var btnLabel = lang === 'en' ? 'ADD TO CART' : 'سفارش بده';
     return '' +
-      '<article class="card card-' + idx + '">' +
+      // --i drives the entry stagger; is-loading is only meaningful for a card
+      // that actually waits on a photo, so a glyph card never shows a skeleton.
+      '<article class="card card-' + idx + (item.image ? ' is-loading' : '') + '" style="--i:' + idx + '">' +
         badge +
         media +
         '<div class="card-body">' +
@@ -767,7 +861,35 @@
   function baseCss(theme, lang) {
     var accent = theme.accent;
     var bg = theme.bg;
+    var fg = theme.fg || '#ffffff';
     var rtl = lang !== 'en';
+
+    // Foreground at an alpha. Every "white" in the stylesheet goes through
+    // this, so a theme can change the text colour without the rest of the
+    // sheet having to know.
+    function fga(a) { return rgba(fg, a); }
+
+    /* Surface treatment — the part of a theme that is not colour. Each gives
+       the cards a different physical character: soft = lifted matte panel,
+       sharp = editorial hairline frame, glass = translucent blurred pane. */
+    var SURFACES_CSS = {
+      soft: {
+        radius: '14px',
+        rest: 'background:' + rgba(accent, 0.03) + ';box-shadow:0 0 0 1px ' + rgba(accent, 0.3) + ',0 24px 50px -34px rgba(0,0,0,.9)',
+        hover: 'box-shadow:0 0 0 1px ' + rgba(accent, 0.6) + ',0 36px 64px -28px rgba(0,0,0,.92),0 0 60px -14px ' + rgba(accent, 0.3)
+      },
+      sharp: {
+        radius: '2px',
+        rest: 'background:transparent;box-shadow:0 0 0 1px ' + fga(0.14),
+        hover: 'box-shadow:0 0 0 1px ' + rgba(accent, 0.75) + ',0 22px 44px -30px rgba(0,0,0,.95)'
+      },
+      glass: {
+        radius: '20px',
+        rest: 'background:' + fga(0.045) + ';backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 ' + fga(0.1) + ',0 0 0 1px ' + rgba(accent, 0.22) + ',0 30px 60px -38px rgba(0,0,0,.95)',
+        hover: 'box-shadow:inset 0 1px 0 ' + fga(0.18) + ',0 0 0 1px ' + rgba(accent, 0.55) + ',0 40px 70px -30px rgba(0,0,0,.95),0 0 70px -18px ' + rgba(accent, 0.32)
+      }
+    };
+    var sf = SURFACES_CSS[theme.surface] || SURFACES_CSS.soft;
     var fontBody = rtl ? "'Vazirmatn', 'Inter', sans-serif" : "'Inter', sans-serif";
     var fontDisplay = rtl ? "'Vazirmatn', sans-serif" : "'Cormorant Garamond', Georgia, serif";
     var dir = rtl ? 'rtl' : 'ltr';
@@ -792,11 +914,24 @@
 
     return [
 '*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}',
-':root{--bg:' + bg + ';--accent:' + accent + ';--ease:cubic-bezier(0.16,1,0.3,1)}',
+/* Motion tokens. Durations follow the Material 3 / Apple HIG bands — 150-300ms
+   for anything the finger or cursor triggers, 400-600ms for structural moves —
+   and the curves are named by job rather than by number:
+     standard  the workhorse; symmetric, no overshoot
+     decel     for things ENTERING the screen: fast in, gentle landing
+     accel     for things leaving
+     spring    slight overshoot, for tactile micro-interactions only */
+':root{--bg:' + bg + ';--accent:' + accent + ';--fg:' + fg +
+  ';--ease:cubic-bezier(0.16,1,0.3,1)' +
+  ';--ease-standard:cubic-bezier(0.4,0,0.2,1)' +
+  ';--ease-decel:cubic-bezier(0,0,0.2,1)' +
+  ';--ease-accel:cubic-bezier(0.4,0,1,1)' +
+  ';--ease-spring:cubic-bezier(0.34,1.56,0.64,1)' +
+  ';--dur-micro:180ms;--dur-hover:240ms;--dur-enter:480ms;--dur-struct:560ms;--stagger:70ms}',
 'html,body{background:var(--bg)}',
-'body{font-family:' + fontBody + ';color:#fff;direction:' + dir + ';overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}',
+'body{font-family:' + fontBody + ';color:var(--fg);direction:' + dir + ';overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}',
 'body.loading{overflow:hidden;height:100vh}',
-'::selection{background:' + rgba(accent, 0.25) + ';color:#fff}',
+'::selection{background:' + rgba(accent, 0.25) + ';color:var(--fg)}',
 /* lenis */
 'html.lenis,html.lenis body{height:auto}',
 '.lenis.lenis-smooth{scroll-behavior:auto !important}',
@@ -809,11 +944,11 @@
 '.loader-title{font-family:' + fontDisplay + ';font-size:clamp(26px,7vw,48px);font-weight:600;color:var(--accent);' + track(0.18) + '}',
 '.loader-bar-track{width:200px;height:2px;margin-top:32px;background:' + rgba(accent, 0.15) + ';border-radius:2px;overflow:hidden}',
 '.loader-bar-fill{width:0%;height:100%;background:var(--accent);transition:width .25s ease}',
-'.loader-note{margin-top:18px;font-size:11px;font-weight:300;' + trackOnly(0.14) + 'color:rgba(255,255,255,.3)}',
+'.loader-note{margin-top:18px;font-size:11px;font-weight:300;' + trackOnly(0.14) + 'color:' + fga(0.3) + '}',
 /* header */
 '#site-header{position:fixed;top:0;left:0;right:0;height:64px;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 34px}',
 '.header-brand{font-family:' + fontDisplay + ';font-size:16px;font-weight:600;color:var(--accent);' + track(0.22) + 'text-shadow:0 2px 24px rgba(0,0,0,.8);text-decoration:none}',
-'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;' + trackOnly(0.18) + 'color:rgba(255,255,255,.6);text-decoration:none;cursor:pointer;transition:color .35s var(--ease),transform .18s var(--ease);display:inline-block;text-shadow:0 2px 24px rgba(0,0,0,.8)}',
+'.header-shop{font-size:11px;font-weight:400;text-transform:uppercase;' + trackOnly(0.18) + 'color:' + fga(0.6) + ';text-decoration:none;cursor:pointer;transition:color .35s var(--ease),transform .18s var(--ease);display:inline-block;text-shadow:0 2px 24px rgba(0,0,0,.8)}',
 /* progress */
 '#progress-track{position:fixed;top:0;right:0;width:2px;height:100vh;height:100lvh;z-index:100;background:' + rgba(accent, 0.15) + '}',
 '#progress-fill{width:100%;height:100%;background:' + rgba(accent, 0.8) + ';transform:scaleY(0);transform-origin:top}',
@@ -827,7 +962,7 @@
 '.ov4{left:8%;top:50%;transform:translateY(-50%);text-align:left}',
 '.ov5{left:8%;top:16%;text-align:left}',
 '.title-text{display:inline-block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(40px,9vw,118px);' + track(0.28) + 'white-space:nowrap;color:' + rgba(accent, 0.92) + ';text-shadow:0 2px 50px rgba(0,0,0,.9);opacity:0}',
-'.oline{display:block;white-space:nowrap;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-weight:' + (rtl ? '500' : '500') + ';font-size:clamp(23px,4.5vw,42px);color:rgba(255,255,255,.9);text-shadow:0 2px 30px rgba(0,0,0,.95),0 0 70px rgba(0,0,0,.8)}',
+'.oline{display:block;white-space:nowrap;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-weight:' + (rtl ? '500' : '500') + ';font-size:clamp(23px,4.5vw,42px);color:' + fga(0.9) + ';text-shadow:0 2px 30px rgba(0,0,0,.95),0 0 70px rgba(0,0,0,.8)}',
 '.word{display:inline-block;opacity:0}',
 '.brand-mark{position:absolute;z-index:2;left:50%;top:83%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}',
 '.brand-word{display:block;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5.4vw,72px);' + track(0.14) + 'white-space:nowrap;color:' + rgba(accent, 0.95) + ';text-shadow:0 2px 50px rgba(0,0,0,.9)}',
@@ -835,65 +970,91 @@
 '.collection{position:relative;padding:150px 34px 170px;background:radial-gradient(ellipse 62% 46% at 50% 0%,' + rgba(accent, 0.06) + ',transparent 72%),var(--bg)}',
 '.collection-head{text-align:center;margin-bottom:78px}',
 '.collection-eyebrow{display:block;font-size:10px;font-weight:500;text-transform:uppercase;' + track(0.4) + 'color:var(--accent)}',
-'.collection-title{margin-top:16px;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5vw,46px);color:#fff}',
+'.collection-title{margin-top:16px;font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(30px,5vw,46px);color:var(--fg)}',
 '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:26px;max-width:1120px;margin:0 auto}',
-'.card{position:relative;display:flex;flex-direction:column;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px ' + rgba(accent, 0.3) + ',0 24px 50px -34px rgba(0,0,0,.9);transition:transform .4s var(--ease),box-shadow .4s var(--ease)}',
-'.card-media{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;transition:transform .5s var(--ease)}',
+'.card{position:relative;display:flex;flex-direction:column;overflow:hidden;border-radius:' + sf.radius + ';' + sf.rest + ';transition:transform var(--dur-hover) var(--ease-standard),box-shadow var(--dur-hover) var(--ease-standard)}',
+'.card-media{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;opacity:1;transition:opacity var(--dur-struct) var(--ease-decel),transform var(--dur-hover) var(--ease-standard)}',
 '.card-media-gen{display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}',
 '.card-media-gen::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 25%,' + rgba(accent, 0.22) + ',transparent 60%)}',
 '.card-glyph{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(60px,9vw,104px);color:' + rgba(accent, 0.5) + ';position:relative;z-index:1;text-shadow:0 4px 40px rgba(0,0,0,.5)}',
 '.card-body{display:flex;flex-direction:column;flex:1;padding:32px 34px 34px;text-align:' + (rtl ? 'right' : 'left') + '}',
 '.card-name{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(28px,3.4vw,38px);' + trackOnly(0.14) + 'color:var(--accent)}',
-'.card-blend{margin-top:4px;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-size:16px;color:rgba(255,255,255,.5)}',
-'.card-ingredients{margin-top:22px;font-size:13px;font-weight:300;line-height:1.7;color:rgba(255,255,255,.6)}',
+'.card-blend{margin-top:4px;font-family:' + fontDisplay + ';font-style:' + (rtl ? 'normal' : 'italic') + ';font-size:16px;color:' + fga(0.5) + '}',
+'.card-ingredients{margin-top:22px;font-size:13px;font-weight:300;line-height:1.7;color:' + fga(0.6) + '}',
 '.card-foot{margin-top:auto;padding-top:34px}',
 '.card-price-row{display:flex;align-items:center;justify-content:space-between;gap:16px;direction:' + dir + '}',
-'.card-price{font-family:' + fontDisplay + ';font-weight:500;font-size:clamp(22px,3vw,30px);color:#fff}',
+'.card-price{font-family:' + fontDisplay + ';font-weight:500;font-size:clamp(22px,3vw,30px);color:var(--fg)}',
 '.card-btn{font-family:' + fontBody + ';font-size:10px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);background:transparent;border:1px solid ' + rgba(accent, 0.45) + ';border-radius:6px;padding:12px 16px;cursor:pointer;white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease),transform .18s var(--ease)}',
-'.card-meta{display:block;margin-top:22px;font-size:10px;font-weight:400;' + trackOnly(0.12) + 'color:rgba(255,255,255,.3)}',
+'.card-meta{display:block;margin-top:22px;font-size:10px;font-weight:400;' + trackOnly(0.12) + 'color:' + fga(0.3) + '}',
 '.card-badge{position:absolute;top:20px;' + (rtl ? 'left' : 'right') + ':20px;z-index:3;font-size:9px;font-weight:500;text-transform:uppercase;' + trackOnly(0.16) + 'color:var(--accent);border:1px solid ' + rgba(accent, 0.4) + ';border-radius:100px;padding:5px 10px;background:' + rgba(bg, 0.5) + '}',
-/* --- skeleton + shimmer for card photos -------------------------------
-   The photo is the only thing on the page that arrives after paint. The
-   wrapper reserves its exact 16/9 box so nothing reflows when it lands,
-   and sweeps a highlight across the placeholder until it does. */
-'.card-media-wrap{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:' + rgba(accent, 0.07) + '}',
-'.card-media-wrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 22%,' + rgba(accent, 0.13) + ' 42%,rgba(255,255,255,.07) 50%,' + rgba(accent, 0.13) + ' 58%,transparent 78%);background-size:260% 100%;animation:cwg-shimmer 1.5s linear infinite;transition:opacity .45s ease}',
+/* ===================== SKELETON =====================================
+   The skeleton is not a separate mock of the card — it IS the card, with
+   its own elements restyled. That is the only way the placeholder can
+   match the final geometry exactly: the boxes being shimmered are the
+   very boxes the text will occupy, so nothing shifts when content lands.
+     .card-name / .card-blend / .card-price  are inline spans, so their
+       block hugs the real text width instead of a guessed one.
+     .card-ingredients is a multi-line <p>, so it gets a repeating
+       gradient on the line rhythm (0.95em bar per 1.7em line box, which
+       is its real line-height) rather than one flat slab.
+     .card-media-wrap reserves the exact 16/9 box before the photo lands.
+
+   Hiding is done with -webkit-text-fill-color, never `color`, so the real
+   colour survives underneath — which is what lets ONE shared failsafe
+   keyframe restore every element with `currentColor`. */
+'.card-media-wrap{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:' + fga(0.06) + '}',
 '.card-media-wrap .card-media{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}',
-/* Gated on html.js (set by a one-liner in <head>, so there is no flash of a
-   hidden image before this rule exists). With JavaScript off the photo is
-   simply visible and the skeleton sits harmlessly behind it. */
-'html.js .card-media-wrap .card-media{opacity:0;transition:opacity .55s var(--ease);animation:cwg-media-failsafe 0s linear 8s forwards}',
-'html.js .card-media-wrap.is-loaded .card-media{opacity:1}',
-'.card-media-wrap.is-loaded::after{opacity:0;animation:none}',
-'@keyframes cwg-shimmer{from{background-position:170% 0}to{background-position:-70% 0}}',
-/* Belt and braces: if the engine never runs at all (a syntax error, a blocked
-   inline script) nothing would ever add .is-loaded, and a hidden photo would
-   be a worse failure than an unpolished one. This reveals it regardless. */
-'@keyframes cwg-media-failsafe{to{opacity:1}}',
+/* the branded panel a failed photo falls back to (see buildCard) */
+'.card-media-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:0;transition:opacity var(--dur-struct) var(--ease-decel)}',
+'.card-media-fallback::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 25%,' + rgba(accent, 0.22) + ',transparent 60%)}',
+'.card.media-failed .card-media{display:none}',
+'.card.media-failed .card-media-fallback{opacity:1}',
+/* Every skeleton rule is gated on html.js — set by a one-liner in <head>,
+   before this stylesheet is parsed, so the placeholder never flashes over
+   already-painted content, and a page without JavaScript simply shows the
+   finished card. */
+'html.js .card.is-loading .card-media{opacity:0}',
+'html.js .card.is-loading .card-name,html.js .card.is-loading .card-blend,html.js .card.is-loading .card-price,html.js .card.is-loading .card-meta,html.js .card.is-loading .card-btn{-webkit-text-fill-color:transparent;background-color:' + fga(0.08) + ';border-radius:6px;animation:cwg-unskeleton 0s linear 8s forwards}',
+'html.js .card.is-loading .card-btn{border-color:' + fga(0.1) + '}',
+'html.js .card.is-loading .card-ingredients{-webkit-text-fill-color:transparent;border-radius:4px;background-image:repeating-linear-gradient(to bottom,' + fga(0.08) + ' 0 0.95em,transparent 0.95em 1.7em);animation:cwg-unskeleton 0s linear 8s forwards}',
+'html.js .card.is-loading .card-badge{opacity:0}',
+/* One sweep for the whole card, so the wait reads as a single object rather
+   than five separate blinking parts. translateX is composited on the GPU —
+   animating background-position would repaint the layer every frame. */
+'html.js .card.is-loading::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;background:linear-gradient(90deg,transparent,' + fga(0.09) + ',transparent);transform:translateX(-100%);will-change:transform;animation:cwg-shimmer 1.6s var(--ease-standard) infinite,cwg-fade-out 0s linear 8s forwards}',
+'@keyframes cwg-shimmer{to{transform:translateX(100%)}}',
+'@keyframes cwg-fade-out{to{opacity:0}}',
+/* Belt and braces. The engine clears .is-loading on load, on error and on an
+   8s timeout, but if it never runs at all — a syntax error, a blocked inline
+   script — the skeleton would be permanent and the copy invisible. This puts
+   every element back without any JavaScript: currentColor still holds the
+   real colour because only the FILL was cleared. */
+'@keyframes cwg-unskeleton{to{-webkit-text-fill-color:currentColor;background-color:transparent;background-image:none}}',
 /* the loader bar picks up the same sweep, so the waiting reads as one system */
 '.loader-bar-fill{position:relative;overflow:hidden}',
-'.loader-bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);background-size:220% 100%;animation:cwg-shimmer 1.1s linear infinite}',
-/* --- app-like touch feedback ------------------------------------------
+'.loader-bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,' + fga(0.55) + ',transparent);transform:translateX(-100%);will-change:transform;animation:cwg-shimmer 1.2s var(--ease-standard) infinite}',
+/* ===================== TOUCH / PRESS ===============================
    touch-action kills the 300ms tap delay; the press-scale gives the
-   physical "it responded" beat a native control has and a web page does not. */
+   physical "it responded" beat a native control has and a web page does
+   not. Spring easing on the release so it settles rather than snaps. */
 'button,a,.card{touch-action:manipulation}',
-'.card-btn:active,.newsletter-btn:active,.header-shop:active{transform:scale(.96)}',
+'.card-btn:active,.newsletter-btn:active,.header-shop:active{transform:scale(.94);transition-duration:var(--dur-micro);transition-timing-function:var(--ease-spring)}',
 '.card:active{transform:scale(.995)}',
 /* newsletter */
 '.newsletter{position:relative;padding:168px 34px;text-align:center;background:radial-gradient(ellipse 80% 60% at 50% 50%,' + rgba(accent, 0.08) + ',transparent 70%),linear-gradient(to bottom,' + rgba(bg, 0.4) + ',var(--bg))}',
-'.newsletter-title{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(34px,6vw,52px);color:#fff}',
-'.newsletter-sub{margin-top:16px;font-size:13px;font-weight:300;' + trackOnly(0.05) + 'color:rgba(255,255,255,.45)}',
+'.newsletter-title{font-family:' + fontDisplay + ';font-weight:600;font-size:clamp(34px,6vw,52px);color:var(--fg)}',
+'.newsletter-sub{margin-top:16px;font-size:13px;font-weight:300;' + trackOnly(0.05) + 'color:' + fga(0.45) + '}',
 '.newsletter-form{margin-top:44px;display:inline-flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;direction:' + dir + '}',
-'.newsletter-input{width:min(320px,78vw);padding:12px 4px;font-family:' + fontBody + ';font-size:13px;color:#fff;background:transparent;border:none;border-bottom:1px solid ' + rgba(accent, 0.55) + ';outline:none;transition:border-color .35s var(--ease);text-align:' + (rtl ? 'right' : 'left') + '}',
-'.newsletter-input::placeholder{color:rgba(255,255,255,.3)}',
+'.newsletter-input{width:min(320px,78vw);padding:12px 4px;font-family:' + fontBody + ';font-size:13px;color:var(--fg);background:transparent;border:none;border-bottom:1px solid ' + rgba(accent, 0.55) + ';outline:none;transition:border-color .35s var(--ease);text-align:' + (rtl ? 'right' : 'left') + '}',
+'.newsletter-input::placeholder{color:' + fga(0.3) + '}',
 '.newsletter-input:focus{border-bottom-color:var(--accent)}',
 '.newsletter-btn{font-family:' + fontBody + ';font-size:12px;font-weight:500;' + trackOnly(0.14) + 'color:var(--accent);background:transparent;border:none;cursor:pointer;padding:8px 2px;transition:opacity .3s ease,transform .18s var(--ease)}',
 '.newsletter-btn span{border-bottom:1px solid transparent;transition:border-color .3s ease}',
 /* footer */
 '.site-footer{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:42px 34px;background:var(--bg);border-top:1px solid ' + rgba(accent, 0.15) + '}',
 '.footer-brand{font-family:' + fontDisplay + ';font-size:18px;font-weight:600;' + track(0.18) + 'color:var(--accent)}',
-'.footer-center{font-size:11px;font-weight:300;' + trackOnly(0.04) + 'color:rgba(255,255,255,.3)}',
-'.footer-links{font-size:11px;color:rgba(255,255,255,.5)}',
+'.footer-center{font-size:11px;font-weight:300;' + trackOnly(0.04) + 'color:' + fga(0.3) + '}',
+'.footer-links{font-size:11px;color:' + fga(0.5) + '}',
 '.footer-links a{color:inherit;text-decoration:none;transition:color .3s ease}',
 /* responsive */
 '@media (max-width:768px){#site-header{padding:0 20px}.collection{padding:110px 22px 120px}.newsletter{padding:120px 22px}.overlay{max-width:84%}.ov2{left:7%;bottom:12%}.ov3{right:7%}.ov4{left:7%}.ov5{left:7%}}',
@@ -901,13 +1062,47 @@
 '@media (max-width:680px){.site-footer{flex-direction:column;text-align:center;gap:16px}}',
 '@media (max-width:480px){#site-header{height:56px}}',
 '@media (max-width:400px){.overlay{max-width:90%}.ov2,.ov4,.ov5{left:5%}.ov3{right:5%}}',
-'@media (hover:hover){.card:hover{transform:translateY(-12px);box-shadow:0 0 0 1px ' + rgba(accent, 0.6) + ',0 36px 64px -28px rgba(0,0,0,.9),0 0 60px -14px ' + rgba(accent, 0.28) + '}.card:hover .card-media{transform:scale(1.045)}.header-shop:hover{color:var(--accent)}.card-btn:hover{background:var(--accent);border-color:var(--accent);color:#100c06}.newsletter-btn:hover span{border-bottom-color:var(--accent)}.footer-links a:hover{text-decoration:underline;color:var(--accent)}}',
+/* Hover lives on transform + box-shadow only: both composite, so the lift
+   never triggers layout. translate3d keeps the card on its own layer. */
+'@media (hover:hover){' +
+  '.card:hover{transform:translate3d(0,-12px,0);' + sf.hover + '}' +
+  '.card:hover .card-media{transform:scale(1.045)}' +
+  '.header-shop:hover{color:var(--accent)}' +
+  '.card-btn:hover{background:var(--accent);border-color:var(--accent);color:var(--bg);transform:translate3d(0,-1px,0);box-shadow:0 8px 20px -10px ' + rgba(accent, 0.8) + '}' +
+  '.newsletter-btn:hover span{border-bottom-color:var(--accent)}' +
+  '.newsletter-input:hover{border-bottom-color:' + rgba(accent, 0.85) + '}' +
+  '.footer-links a:hover{text-decoration:underline;color:var(--accent)}' +
+'}',
 /* keyboard accessibility — the design relies on hover, so without these a
    keyboard user has no idea where they are on the page */
 '.skip-link{position:absolute;top:-120px;' + (rtl ? 'right' : 'left') + ':16px;z-index:1100;background:var(--accent);color:' + bg + ';font-family:' + fontBody + ';font-size:13px;font-weight:600;padding:12px 20px;border-radius:0 0 8px 8px;text-decoration:none;transition:top .2s ease}',
 '.skip-link:focus{top:0}',
 '.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}',
-'a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}',
+'a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px;transition:outline-offset var(--dur-micro) var(--ease-spring)}',
+/* ===================== STAGGERED ENTRY ==============================
+   Deliberately declared INSIDE prefers-reduced-motion:no-preference, not
+   disabled inside a `reduce` block. That way the hidden starting state
+   only ever exists for someone who opted into motion — if the query does
+   not match, the rules are never parsed and the content is simply there.
+   No chance of leaving a reduced-motion visitor with an invisible page.
+
+   Entry is an animation rather than a transition on purpose: a transition
+   would need its stagger delay declared on the .is-in rule, and that same
+   delay would then apply to every later hover, so the card would lift a
+   fifth of a second after the cursor arrived. The animation is cleared on
+   animationend (.is-done) so hover gets its own clean transition back.
+
+   Only opacity and translate3d are animated — both composite, neither
+   triggers layout. */
+'@media (prefers-reduced-motion:no-preference){',
+'html.js .card,html.js .nl-reveal{opacity:0;animation:cwg-enter var(--dur-enter) var(--ease-decel) calc(var(--i,0) * var(--stagger)) both paused,cwg-fade-in 0s linear 8s forwards}',
+'html.js .card.is-in,html.js .nl-reveal.is-in{animation-play-state:running}',
+'html.js .card.is-done,html.js .nl-reveal.is-done{animation:none;opacity:1}',
+'@keyframes cwg-enter{from{opacity:0;transform:translate3d(0,26px,0)}to{opacity:1;transform:none}}',
+/* same belt and braces as the skeleton: if the observer never runs, the
+   content still arrives rather than staying at opacity 0 for ever */
+'@keyframes cwg-fade-in{to{opacity:1}}',
+'}',
 /* Applied by the engine when it gives up on the scroll timeline (a blocked or
    slow CDN leaves GSAP undefined). Without it the overlay copy would be
    revealed but still absolutely positioned at four different anchors, i.e.
@@ -959,10 +1154,27 @@ staticHeroCss(rtl),
     var cfg = input || {};
     var preset = presetFor(cfg.field);
     var lang = cfg.lang || 'fa';
+    /* Theme resolution. `theme` accepts either form:
+         theme: 'aurora'   — a name from THEMES
+         theme: { … }      — an already-resolved theme object
+       The second matters because /api/generate-from-prompt returns the
+       RESOLVED config and the builder posts it straight back; without this
+       a round-trip would silently drop the chosen theme.
+       Precedence is explicit-wins: a colour the caller passed outright beats
+       the theme, the theme beats the field preset. */
+    var named = typeof cfg.theme === 'string' ? themeFor(cfg.theme) : null;
+    var passed = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : null;
+    var themeName = typeof cfg.theme === 'string'
+      ? (THEMES[cfg.theme] ? cfg.theme : 'midnight')
+      : ((passed && passed.name) || '');
+    var chosen = named || passed;
+
     // Colours land in raw CSS, so they are validated (not escaped) here — at
     // the one place every path funnels through — rather than at each use site.
-    var accent = safeColor(cfg.accent, preset.accent);
-    var bg = safeColor(cfg.bg, preset.bg);
+    var accent = safeColor(cfg.accent, safeColor(chosen && chosen.accent, preset.accent));
+    var bg = safeColor(cfg.bg, safeColor(chosen && chosen.bg, preset.bg));
+    var fg = safeColor(cfg.fg, safeColor(chosen && chosen.fg, '#ffffff'));
+    var surface = safeSurface(cfg.surface, safeSurface(chosen && chosen.surface, 'soft'));
     var brand = cfg.brand || preset.label;
 
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
@@ -978,8 +1190,9 @@ staticHeroCss(rtl),
       title: cfg.title || (brand + ' — ' + (cfg.fieldLabel || preset.label)),
       description: cfg.description || cfg.tagline || (brand + ' · ' + preset.label),
       theme: {
-        accent: accent, bg: bg,
-        motif: cfg.motif || preset.motif
+        name: themeName,
+        accent: accent, bg: bg, fg: fg, surface: surface,
+        motif: cfg.motif || (chosen && chosen.motif) || preset.motif
       },
       heroTitle: cfg.heroTitle || preset.heroTitle,
       overlays: overlays,
@@ -1175,9 +1388,9 @@ jsonLd +
 '</section>\n\n' +
 '<!-- newsletter -->\n' +
 '<section class="newsletter">\n' +
-'  <h2 class="newsletter-title nl-reveal">' + esc(c.newsletterTitle) + '</h2>\n' +
-'  <p class="newsletter-sub nl-reveal">' + esc(c.newsletterSub) + '</p>\n' +
-'  <form class="newsletter-form nl-reveal" id="nlForm">\n' +
+'  <h2 class="newsletter-title nl-reveal" style="--i:0">' + esc(c.newsletterTitle) + '</h2>\n' +
+'  <p class="newsletter-sub nl-reveal" style="--i:1">' + esc(c.newsletterSub) + '</p>\n' +
+'  <form class="newsletter-form nl-reveal" id="nlForm" style="--i:2">\n' +
 '    <input class="newsletter-input" type="email" placeholder="' + esc(c.newsletterPlaceholder) + '" aria-label="' + esc(c.newsletterPlaceholder) + '" />\n' +
 '    <button class="newsletter-btn" type="submit"><span>' + esc(c.newsletterCta) + '</span></button>\n' +
 '  </form>\n' +
@@ -1292,6 +1505,8 @@ jsonLd +
     presetFor: presetFor,
     parsePrompt: parsePrompt,
     presets: PRESETS,
+    themes: THEMES,
+    themeFor: themeFor,
     util: { shift: shift, rgba: rgba, toHsl: toHsl }
   };
 });

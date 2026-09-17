@@ -63,7 +63,7 @@ app.post('/api/generate', (req, res) => {
 app.get('/api/site', (req, res) => {
   try {
     const q = req.query || {};
-    const cfg = { field: q.field, brand: q.brand, lang: q.lang, accent: q.accent };
+    const cfg = { field: q.field, brand: q.brand, lang: q.lang, accent: q.accent, theme: q.theme, surface: q.surface };
     res.type('html').send(CWG.generate(cfg));
   } catch (err) {
     res.status(400).type('text').send('Could not generate: ' + (err && err.message));
@@ -83,11 +83,15 @@ app.get('/api/site', (req, res) => {
 // path (NabuGate, Anthropic) produces the same shape.
 function buildConfigSystemPrompt() {
   const fields = Object.keys(CWG.presets).join(', ');
+  const themes = Object.keys(CWG.themes).filter((t) => t[0] !== '_').join(', ');
   return (
     'You convert a business description into a JSON config for a cinematic website generator. ' +
     'Return ONLY a JSON object — no prose, no markdown fences. Keys: ' +
     'brand (string), field (one of: ' + fields + '), lang ("fa" or "en", inferred from the description language), ' +
-    'accent (a hex colour fitting the brand), heroTitle (1-2 words for the big hero word, in the chosen language), ' +
+    'theme (one of: ' + themes + ' — pick the visual register that suits the brand; it sets the palette, ' +
+    'the ambient motif and the card surface. Omit `accent` unless the description names a specific colour, ' +
+    'so the theme stays coherent), ' +
+    'heroTitle (1-2 words for the big hero word, in the chosen language), ' +
     'eyebrow, collectionTitle, overlays (array of 2-4 entries, each an array of 1-2 short poetic lines), ' +
     'items (array of EXACTLY 3 objects: {name, blend, desc, price, meta, badge?}), ' +
     'newsletterTitle, newsletterSub, footerNote. Write ALL copy in the chosen language. Keep it elegant and on-brand.'
