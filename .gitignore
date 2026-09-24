@@ -10,6 +10,9 @@ resourcess-assets/video-01.mp4
 # Vercel
 .vercel
 
+# npm pack output
+*.tgz
+
 # Runtime: AI-generated images saved by POST /api/image
 public/generated/
 

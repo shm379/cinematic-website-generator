@@ -4,15 +4,22 @@
 # Works out of the box with Coolify (Dockerfile build pack) — see README.
 
 FROM node:20-alpine AS base
-ENV NODE_ENV=production
 # Default port; platforms (Coolify, etc.) may override PORT at runtime and
 # server.js binds exactly to it on 0.0.0.0.
 ENV PORT=3000
 WORKDIR /app
 
-# Install only production deps (express) using the lockfile for reproducible builds
+# express is a devDependency because the PUBLISHED npm package is the generator
+# library + CLI, which need nothing at runtime — a consumer running
+# `npx cinemate` should not pull express's tree to render one HTML file. The
+# demo server in this image does need it, hence --include=dev.
+#
+# NODE_ENV is deliberately set AFTER the install: npm treats
+# NODE_ENV=production as implying --omit=dev, which would win over the flag
+# and leave the image without express.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --include=dev && npm cache clean --force
+ENV NODE_ENV=production
 
 # App source (public/, server.js, generator.js, etc.)
 COPY . .

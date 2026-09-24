@@ -6,6 +6,49 @@
 
 ---
 
+## 📦 با یک دستور — بدونِ کلون، بدونِ نصب
+
+موتورِ ساخت روی npm منتشر می‌شود؛ پس برای ساختنِ سایت لازم نیست این مخزن را بردارید:
+
+```bash
+npx cinemate --brand "کافه نبات" --field coffee --theme aurora
+#  ✨ cinematic-site.html  (41.0 KB, self-contained)
+```
+
+یا فقط توصیفش کنید:
+
+```bash
+npx cinemate --prompt "یک کافه به نام نبات با رنگ قهوه‌ای" -o site.html
+```
+
+خروجی **یک فایلِ HTML خودکفاست** — چیزی برای build یا serve کردن ندارد؛ در مرورگر بازش کنید یا هر جای استاتیکی بگذاریدش.
+
+```bash
+npx cinemate --themes    # کاتالوگِ تم‌ها
+npx cinemate --fields    # حوزه‌های کاری
+npx cinemate --help
+```
+
+**به‌صورتِ کتابخانه:**
+
+```bash
+npm install cinemate
+```
+
+```js
+const cinemate = require('cinemate');
+
+const html = cinemate.generate({ brand: 'نبات', field: 'coffee', theme: 'aurora' });
+cinemate.renderToFile({ brand: 'Nabat', field: 'jewelry', theme: 'noir', lang: 'en' }, 'dist/index.html');
+
+cinemate.themes();   // ['midnight','noir','aurora','sunset','royal','forest','ember']
+cinemate.fields();   // ['tea','coffee','perfume', … ]
+```
+
+> پکیجِ منتشرشده **هیچ وابستگیِ زمانِ اجرا ندارد** — فقط موتور و CLI (حدود ۴۰KB). `express` و SDKها فقط برای سرورِ دمو در همین مخزن لازم‌اند و در tarball نیستند، تا `npx cinemate` فوری بالا بیاید.
+
+---
+
 ## ✨ چه چیزی ساخته شده؟
 
 * **لندینگِ کامل (`/`)** — هیرو با **پیش‌نمایش زنده‌ی قابل‌تعویض**، بخش ویژگی‌ها، «چطور کار می‌کند»، **نمونه‌های زنده‌ی قابل‌کلیک**، قیمت‌گذاری/میزبانی، FAQ و CTA.

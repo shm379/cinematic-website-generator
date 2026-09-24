@@ -1,21 +1,61 @@
 {
-  "name": "cinematic-website-generator",
+  "name": "cinemate",
   "version": "1.0.0",
-  "description": "A panel that turns a brand + field of work into a cinematic scroll-driven website",
-  "main": "server.js",
+  "description": "Turn a brand and a line of description into a complete, self-contained cinematic scroll-driven website — one HTML file, no build step, RTL/Persian first.",
+  "keywords": [
+    "website-generator",
+    "static-site",
+    "landing-page",
+    "scrollytelling",
+    "cinematic",
+    "gsap",
+    "scrolltrigger",
+    "canvas",
+    "rtl",
+    "persian",
+    "farsi",
+    "html-generator",
+    "skeleton-screen",
+    "cli"
+  ],
+  "homepage": "https://github.com/shm379/cinematic-website-generator#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shm379/cinematic-website-generator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shm379/cinematic-website-generator/issues"
+  },
+  "author": "shm379",
+  "license": "ISC",
+  "type": "commonjs",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./generator": "./public/generator.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "cinemate": "bin/cinemate.js"
+  },
+  "files": [
+    "lib/",
+    "bin/",
+    "public/generator.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "check": "node --check server.js && node --check public/generator.js && node --check public/app.js"
+    "check": "node --check server.js && node --check public/generator.js && node --check public/app.js && node --check lib/index.js && node --check bin/cinemate.js",
+    "prepublishOnly": "npm run check && npm test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "express": "^5.2.1"
-  },
-  "optionalDependencies": {
+  "devDependencies": {
+    "express": "^5.2.1",
     "@anthropic-ai/sdk": "^0.105.0"
   }
 }
