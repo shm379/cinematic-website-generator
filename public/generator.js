@@ -1465,11 +1465,24 @@ jsonLd +
     return '_default';
   }
 
+  // accentHit matches an accent keyword. Unlike field keywords — which lean on
+  // substring matching so stemmed variants still hit — colour words are complete
+  // in themselves, so every LATIN keyword must match as a WHOLE word. Without
+  // that, "red" fires inside "prepared"/"covered", "ember" inside "remember"
+  // and "lime" inside "sublime", silently overriding the preset accent. Persian
+  // keywords keep substring matching (list order handles سبز vs سبزآبی).
+  function accentHit(t, kw) {
+    if (/^[a-z]+$/.test(kw)) {
+      return new RegExp('(^|[^a-z])' + kw + '($|[^a-z])').test(t);
+    }
+    return t.indexOf(kw) !== -1;
+  }
+
   function detectAccent(t) {
     for (var i = 0; i < ACCENT_KEYWORDS.length; i++) {
       var kws = ACCENT_KEYWORDS[i][1];
       for (var j = 0; j < kws.length; j++) {
-        if (t.indexOf(kws[j].toLowerCase()) !== -1) return ACCENT_KEYWORDS[i][0];
+        if (accentHit(t, kws[j].toLowerCase())) return ACCENT_KEYWORDS[i][0];
       }
     }
     return null;
