@@ -1179,8 +1179,13 @@ staticHeroCss(rtl),
 
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
     // these) — fall back to the preset so generate() never throws on .map/.slice.
+    // Also drop non-object ELEMENTS: an LLM can emit a stray null inside an
+    // otherwise-valid array, and buildCard reads properties off each item, so a
+    // null there would throw halfway through building the document.
     var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
-    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
+    var items = Array.isArray(cfg.items)
+      ? cfg.items.filter(function (it) { return it && typeof it === 'object'; })
+      : preset.items;
 
     return {
       brand: brand,
@@ -1205,9 +1210,11 @@ staticHeroCss(rtl),
       newsletterPlaceholder: cfg.newsletterPlaceholder || (lang === 'en' ? 'your email' : 'ایمیل شما'),
       shopLabel: cfg.shopLabel || (lang === 'en' ? 'SHOP' : 'سفارش'),
       footerNote: cfg.footerNote || preset.footerNote,
-      footerLinks: Array.isArray(cfg.footerLinks) ? cfg.footerLinks : (lang === 'en'
-        ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
-        : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
+      footerLinks: Array.isArray(cfg.footerLinks)
+        ? cfg.footerLinks.filter(function (l) { return l && typeof l === 'object'; })
+        : (lang === 'en'
+          ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
+          : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
       year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵'),
       // Optional, and only ever absolute: an empty value means the tag is
       // omitted rather than emitted pointing at nothing.

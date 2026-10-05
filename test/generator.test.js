@@ -451,6 +451,27 @@ test('non-array overlays/items/footerLinks fall back to the preset', () => {
   }
 });
 
+test('a stray null element inside items/footerLinks does not crash generate', () => {
+  // an LLM answering the mega-prompt can emit a null (or other non-object)
+  // inside an otherwise-valid array; buildCard/footer read properties off each
+  // element, so generate() must drop the junk rather than throw mid-document
+  const cfg = CWG.withDefaults({
+    field: 'tea',
+    items: [null, { name: 'نگه‌دار', price: '۹' }, 'oops'],
+    footerLinks: [null, { label: 'اینستاگرام', href: 'https://instagram.com/x' }]
+  });
+  assert.deepEqual(cfg.items, [{ name: 'نگه‌دار', price: '۹' }]);
+  assert.equal(cfg.footerLinks.length, 1);
+  const html = CWG.generate({
+    field: 'tea',
+    items: [null, { name: 'نگه‌دار', price: '۹' }],
+    footerLinks: [null, { label: 'اینستاگرام', href: 'https://instagram.com/x' }]
+  });
+  assert.match(html, /^<!DOCTYPE html>/);
+  assert.match(html, /نگه‌دار/);
+  assert.match(html, /<a href="https:\/\/instagram\.com\/x">اینستاگرام<\/a>/);
+});
+
 test('short latin keywords only match as whole words', () => {
   // "ai" must not fire inside retail/email/domain and misclassify the field
   assert.equal(CWG.parsePrompt('a retail brand for email campaigns').field, '_default');
