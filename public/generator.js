@@ -1180,7 +1180,14 @@ staticHeroCss(rtl),
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
     // these) — fall back to the preset so generate() never throws on .map/.slice.
     var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
-    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
+    // Also drop null/undefined entries inside the items array: buildCard() and
+    // the JSON-LD offer map both dereference each item (it.image, it.name), so a
+    // single null element — easy for an LLM to emit — would otherwise throw. If
+    // nothing survives, fall back to the preset rather than render zero cards.
+    var items = Array.isArray(cfg.items)
+      ? cfg.items.filter(function (it) { return it && typeof it === 'object'; })
+      : preset.items;
+    if (!items.length) items = preset.items;
 
     return {
       brand: brand,
@@ -1205,7 +1212,11 @@ staticHeroCss(rtl),
       newsletterPlaceholder: cfg.newsletterPlaceholder || (lang === 'en' ? 'your email' : 'ایمیل شما'),
       shopLabel: cfg.shopLabel || (lang === 'en' ? 'SHOP' : 'سفارش'),
       footerNote: cfg.footerNote || preset.footerNote,
-      footerLinks: Array.isArray(cfg.footerLinks) ? cfg.footerLinks : (lang === 'en'
+      // Drop null/non-object entries too — generate() dereferences l.href/l.label
+      // per link, so a null element would throw just like the items array above.
+      footerLinks: Array.isArray(cfg.footerLinks)
+        ? cfg.footerLinks.filter(function (l) { return l && typeof l === 'object'; })
+        : (lang === 'en'
         ? [{ label: 'Instagram', href: '#top' }, { label: 'Contact', href: '#top' }]
         : [{ label: 'اینستاگرام', href: '#top' }, { label: 'تماس', href: '#top' }]),
       year: cfg.year || (lang === 'en' ? '2026' : '۱۴۰۵'),
