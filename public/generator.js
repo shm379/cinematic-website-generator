@@ -1465,11 +1465,24 @@ jsonLd +
     return '_default';
   }
 
+  // accentHit matches a colour keyword in the (already-lowercased) text t.
+  // Latin colour names must match as WHOLE words: plain substring matching let
+  // short ones (notably "red") fire inside unrelated words — "credit", "bored",
+  // "hundred", "sacred", "predictive" — and silently forced an ember accent
+  // onto sites that never named a colour. Persian names keep substring matching
+  // so attached forms ("طلایی‌رنگ") still hit, as kwHit does for the field.
+  function accentHit(t, kw) {
+    if (/^[a-z]+$/.test(kw)) {
+      return new RegExp('(^|[^a-z])' + kw + '($|[^a-z])').test(t);
+    }
+    return t.indexOf(kw) !== -1;
+  }
+
   function detectAccent(t) {
     for (var i = 0; i < ACCENT_KEYWORDS.length; i++) {
       var kws = ACCENT_KEYWORDS[i][1];
       for (var j = 0; j < kws.length; j++) {
-        if (t.indexOf(kws[j].toLowerCase()) !== -1) return ACCENT_KEYWORDS[i][0];
+        if (accentHit(t, kws[j].toLowerCase())) return ACCENT_KEYWORDS[i][0];
       }
     }
     return null;
