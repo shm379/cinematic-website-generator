@@ -806,6 +806,9 @@
   }
 
   function buildCard(item, accent, idx, lang) {
+    // Tolerate a null / non-object entry (e.g. an LLM emitting [null] or a
+    // stray string in items) so one bad card never crashes the whole page.
+    item = (item && typeof item === 'object') ? item : {};
     var media;
     if (item.image) {
       // The photo is the one thing on the page that arrives over the network
@@ -1303,6 +1306,7 @@ staticHeroCss(rtl),
     if (c.ogImage) ld.image = c.ogImage;
     if ((c.items || []).length) {
       ld.makesOffer = c.items.slice(0, 3).map(function (it) {
+        it = (it && typeof it === 'object') ? it : {};
         return {
           '@type': 'Offer',
           itemOffered: {
