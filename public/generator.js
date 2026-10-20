@@ -806,6 +806,7 @@
   }
 
   function buildCard(item, accent, idx, lang) {
+    item = item || {}; // a null/undefined entry (e.g. from an LLM) must not crash
     var media;
     if (item.image) {
       // The photo is the one thing on the page that arrives over the network
@@ -1303,6 +1304,7 @@ staticHeroCss(rtl),
     if (c.ogImage) ld.image = c.ogImage;
     if ((c.items || []).length) {
       ld.makesOffer = c.items.slice(0, 3).map(function (it) {
+        it = it || {}; // guard null/undefined entries so JSON-LD never throws
         return {
           '@type': 'Offer',
           itemOffered: {
