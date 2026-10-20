@@ -820,8 +820,23 @@ html.lenis, html.lenis body { height: auto; }
     });
   }
 
+  /* ---------- static reveal: a correct hero with no animation libraries ----
+     Used when GSAP/ScrollTrigger are unavailable (e.g. a blocked CDN — a real
+     scenario for this audience). The hero frame + brand mark stay visible and
+     the collection/newsletter sit at their natural state, instead of the whole
+     page being stranded behind the loader. */
+  function staticReveal() {
+    var title = document.querySelector('#ov1 .title-text');
+    if (title) { title.style.opacity = '1'; title.style.transform = 'none'; }
+    var brand = document.getElementById('ovBrand');
+    if (brand) brand.style.opacity = '1';
+  }
+
   /* ---------- scroll-driven animation ---------- */
   function buildScroll() {
+    // No animation engine (blocked/slow CDN) → reveal a static hero instead of
+    // throwing, which would otherwise leave the page stuck on the loader.
+    if (!window.gsap || !window.ScrollTrigger) { staticReveal(); return; }
     gsap.registerPlugin(ScrollTrigger);
     ScrollTrigger.config({ ignoreMobileResize: true });
 
@@ -935,14 +950,15 @@ html.lenis, html.lenis body { height: auto; }
       .then(function () {
         sizeCanvas();
         render(0);
-        buildScroll();
+        // Never let a scroll-setup failure trap the page behind the loader.
+        try { buildScroll(); } catch (e) { staticReveal(); }
 
         loader.classList.add('hidden');
         setTimeout(function () {
           document.body.classList.remove('loading');
           loader.style.display = 'none';
           if (lenis) lenis.start();
-          requestAnimationFrame(function () { ScrollTrigger.refresh(); });
+          requestAnimationFrame(function () { if (window.ScrollTrigger) ScrollTrigger.refresh(); });
         }, 850);
       });
   }
