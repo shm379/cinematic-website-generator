@@ -806,6 +806,11 @@
   }
 
   function buildCard(item, accent, idx, lang) {
+    // An items array can reach here with a stray null/string element (an LLM
+    // filling the mega-prompt schema, or a direct API caller) — the array
+    // shape is already guarded in withDefaults, so tolerate the elements too
+    // rather than crashing on item.image / item.name.
+    item = (item && typeof item === 'object') ? item : {};
     var media;
     if (item.image) {
       // The photo is the one thing on the page that arrives over the network
@@ -1243,7 +1248,11 @@ staticHeroCss(rtl),
     }).join('\n    ');
 
     var footerLinksHtml = (c.footerLinks || []).map(function (l) {
-      return '<a href="' + esc(safeHref(l.href)) + '">' + esc(l.label) + '</a>';
+      // Tolerate a stray null or a bare string entry (e.g. footerLinks:
+      // ['Instagram', 'Contact']) the same way the items array is tolerated —
+      // a string becomes the label, so neither shape can crash on l.href.
+      var link = (l && typeof l === 'object') ? l : { label: l };
+      return '<a href="' + esc(safeHref(link.href)) + '">' + esc(link.label) + '</a>';
     }).join(' · ');
 
     // fonts
@@ -1303,12 +1312,13 @@ staticHeroCss(rtl),
     if (c.ogImage) ld.image = c.ogImage;
     if ((c.items || []).length) {
       ld.makesOffer = c.items.slice(0, 3).map(function (it) {
+        var o = (it && typeof it === 'object') ? it : {};
         return {
           '@type': 'Offer',
           itemOffered: {
             '@type': 'Product',
-            name: String(it.name == null ? '' : it.name),
-            description: String(it.desc || it.blend || '')
+            name: String(o.name == null ? '' : o.name),
+            description: String(o.desc || o.blend || '')
           }
         };
       });
