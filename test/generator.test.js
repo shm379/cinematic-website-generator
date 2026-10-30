@@ -451,6 +451,19 @@ test('non-array overlays/items/footerLinks fall back to the preset', () => {
   }
 });
 
+test('arrays with stray null/string elements do not crash generate', () => {
+  // the array is the right shape, but a single bad element (an LLM dropping a
+  // null into items, or a caller passing footerLinks as plain label strings)
+  // must still render rather than throw on item.image / l.href
+  assert.match(
+    CWG.generate({ field: 'tea', items: [null, 'oops', { name: 'Real' }] }),
+    /^<!DOCTYPE html>/
+  );
+  const html = CWG.generate({ field: 'tea', footerLinks: ['Instagram', 'Contact', null] });
+  assert.match(html, /^<!DOCTYPE html>/);
+  assert.match(html, /Instagram/);
+});
+
 test('short latin keywords only match as whole words', () => {
   // "ai" must not fire inside retail/email/domain and misclassify the field
   assert.equal(CWG.parsePrompt('a retail brand for email campaigns').field, '_default');
