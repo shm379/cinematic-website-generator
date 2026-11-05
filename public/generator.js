@@ -245,7 +245,10 @@
   };
 
   function presetFor(field) {
-    return PRESETS[field] || PRESETS._default;
+    // Own-property check: a bare PRESETS[field] lookup would return inherited
+    // Object.prototype members (e.g. field "constructor" / "__proto__" /
+    // "toString"), bypassing the fallback and crashing later on preset.items.
+    return (field && Object.prototype.hasOwnProperty.call(PRESETS, field)) ? PRESETS[field] : PRESETS._default;
   }
 
   /* ============================================================
@@ -294,7 +297,9 @@
   THEMES._default = THEMES.midnight;
 
   function themeFor(name) {
-    return THEMES[name] || THEMES._default;
+    // Own-property check, same reason as presetFor: an inherited key like
+    // "constructor" must fall back to the default theme, not a prototype member.
+    return (name && Object.prototype.hasOwnProperty.call(THEMES, name)) ? THEMES[name] : THEMES._default;
   }
 
   function safeSurface(v, fallback) {
@@ -818,7 +823,7 @@
       // in the middle of the card; the engine hides the <img> instead and this
       // takes over, so a dead URL degrades to the same branded panel a card
       // with no photo would have had.
-      var fbInitial = (item.name || '').trim().charAt(0) || '✦';
+      var fbInitial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media-wrap">' +
         '<div class="card-media-fallback" style="background:' + cardMediaStyle(accent, idx) + '" aria-hidden="true">' +
           '<span class="card-glyph">' + esc(fbInitial) + '</span>' +
@@ -826,7 +831,7 @@
         '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />' +
         '</div>';
     } else {
-      var initial = (item.name || '').trim().charAt(0) || '✦';
+      var initial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media card-media-gen" style="background:' + cardMediaStyle(accent, idx) + '">' +
         '<span class="card-glyph">' + esc(initial) + '</span></div>';
     }
@@ -1165,7 +1170,7 @@ staticHeroCss(rtl),
     var named = typeof cfg.theme === 'string' ? themeFor(cfg.theme) : null;
     var passed = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : null;
     var themeName = typeof cfg.theme === 'string'
-      ? (THEMES[cfg.theme] ? cfg.theme : 'midnight')
+      ? (Object.prototype.hasOwnProperty.call(THEMES, cfg.theme) ? cfg.theme : 'midnight')
       : ((passed && passed.name) || '');
     var chosen = named || passed;
 
