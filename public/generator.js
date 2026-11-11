@@ -806,6 +806,11 @@
   }
 
   function buildCard(item, accent, idx, lang) {
+    // A malformed items array (an LLM emitting null entries, or a numeric/object
+    // name) must degrade to a blank-but-valid card, never throw — same contract
+    // withDefaults keeps for non-array shapes. Coerce the item and read the
+    // first glyph through String() so a non-string name can't crash .trim().
+    item = item || {};
     var media;
     if (item.image) {
       // The photo is the one thing on the page that arrives over the network
@@ -818,7 +823,7 @@
       // in the middle of the card; the engine hides the <img> instead and this
       // takes over, so a dead URL degrades to the same branded panel a card
       // with no photo would have had.
-      var fbInitial = (item.name || '').trim().charAt(0) || '✦';
+      var fbInitial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media-wrap">' +
         '<div class="card-media-fallback" style="background:' + cardMediaStyle(accent, idx) + '" aria-hidden="true">' +
           '<span class="card-glyph">' + esc(fbInitial) + '</span>' +
@@ -826,7 +831,7 @@
         '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />' +
         '</div>';
     } else {
-      var initial = (item.name || '').trim().charAt(0) || '✦';
+      var initial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media card-media-gen" style="background:' + cardMediaStyle(accent, idx) + '">' +
         '<span class="card-glyph">' + esc(initial) + '</span></div>';
     }
@@ -1242,7 +1247,7 @@ staticHeroCss(rtl),
       return buildCard(it, accent, i, lang);
     }).join('\n    ');
 
-    var footerLinksHtml = (c.footerLinks || []).map(function (l) {
+    var footerLinksHtml = (c.footerLinks || []).filter(Boolean).map(function (l) {
       return '<a href="' + esc(safeHref(l.href)) + '">' + esc(l.label) + '</a>';
     }).join(' · ');
 
@@ -1303,6 +1308,7 @@ staticHeroCss(rtl),
     if (c.ogImage) ld.image = c.ogImage;
     if ((c.items || []).length) {
       ld.makesOffer = c.items.slice(0, 3).map(function (it) {
+        it = it || {};
         return {
           '@type': 'Offer',
           itemOffered: {
