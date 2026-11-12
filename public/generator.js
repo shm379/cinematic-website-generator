@@ -1179,8 +1179,17 @@ staticHeroCss(rtl),
 
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
     // these) — fall back to the preset so generate() never throws on .map/.slice.
-    var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
-    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
+    // The preset fallbacks are CLONED, never returned by reference: PRESETS is
+    // shared module state, so handing a caller the live array would let them
+    // mutate every future site for that field. The server does exactly that —
+    // autofillPhotos() sets item.image in place — which without this would bake
+    // one request's stock photos into the global preset for all later requests.
+    var overlays = Array.isArray(cfg.overlays)
+      ? cfg.overlays
+      : preset.overlays.map(function (ln) { return Array.isArray(ln) ? ln.slice() : ln; });
+    var items = Array.isArray(cfg.items)
+      ? cfg.items
+      : preset.items.map(function (it) { return Object.assign({}, it); });
 
     return {
       brand: brand,
