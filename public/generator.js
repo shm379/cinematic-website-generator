@@ -1465,11 +1465,24 @@ jsonLd +
     return '_default';
   }
 
+  // accentHit mirrors kwHit's split for colour names: latin keywords must match
+  // as WHOLE WORDS, otherwise a short colour noun hits an incidental substring
+  // — "red" inside "covered"/"hundred", "gold" inside "marigold", "lime" inside
+  // "sublime", "rose" inside "rosemary"/"prose" — and mis-tints the whole site
+  // from an unrelated word. Persian keywords keep plain substring matching
+  // (their neighbours are already non-latin word boundaries).
+  function accentHit(t, kw) {
+    if (/^[a-z]+$/.test(kw)) {
+      return new RegExp('(^|[^a-z])' + kw + '($|[^a-z])').test(t);
+    }
+    return t.indexOf(kw) !== -1;
+  }
+
   function detectAccent(t) {
     for (var i = 0; i < ACCENT_KEYWORDS.length; i++) {
       var kws = ACCENT_KEYWORDS[i][1];
       for (var j = 0; j < kws.length; j++) {
-        if (t.indexOf(kws[j].toLowerCase()) !== -1) return ACCENT_KEYWORDS[i][0];
+        if (accentHit(t, kws[j].toLowerCase())) return ACCENT_KEYWORDS[i][0];
       }
     }
     return null;
