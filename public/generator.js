@@ -818,7 +818,7 @@
       // in the middle of the card; the engine hides the <img> instead and this
       // takes over, so a dead URL degrades to the same branded panel a card
       // with no photo would have had.
-      var fbInitial = (item.name || '').trim().charAt(0) || '✦';
+      var fbInitial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media-wrap">' +
         '<div class="card-media-fallback" style="background:' + cardMediaStyle(accent, idx) + '" aria-hidden="true">' +
           '<span class="card-glyph">' + esc(fbInitial) + '</span>' +
@@ -826,7 +826,7 @@
         '<img class="card-media" src="' + esc(item.image) + '" alt="' + esc(item.name) + '" loading="lazy" decoding="async" />' +
         '</div>';
     } else {
-      var initial = (item.name || '').trim().charAt(0) || '✦';
+      var initial = String(item.name == null ? '' : item.name).trim().charAt(0) || '✦';
       media = '<div class="card-media card-media-gen" style="background:' + cardMediaStyle(accent, idx) + '">' +
         '<span class="card-glyph">' + esc(initial) + '</span></div>';
     }
@@ -1180,7 +1180,12 @@ staticHeroCss(rtl),
     // Guard against non-array shapes (e.g. an LLM emitting a string/object for
     // these) — fall back to the preset so generate() never throws on .map/.slice.
     var overlays = Array.isArray(cfg.overlays) ? cfg.overlays : preset.overlays;
-    var items = Array.isArray(cfg.items) ? cfg.items : preset.items;
+    // Coerce each item to an object too: an LLM can emit a null or a bare
+    // string inside an otherwise-valid items array, and both buildCard() and
+    // the JSON-LD offer map dereference item fields, so a single bad element
+    // would otherwise throw and fail the whole generation.
+    var items = (Array.isArray(cfg.items) ? cfg.items : preset.items)
+      .map(function (it) { return it && typeof it === 'object' ? it : {}; });
 
     return {
       brand: brand,
@@ -1243,6 +1248,7 @@ staticHeroCss(rtl),
     }).join('\n    ');
 
     var footerLinksHtml = (c.footerLinks || []).map(function (l) {
+      l = l || {}; // a null/non-object link element must not crash the build
       return '<a href="' + esc(safeHref(l.href)) + '">' + esc(l.label) + '</a>';
     }).join(' · ');
 
